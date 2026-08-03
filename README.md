@@ -113,7 +113,7 @@ HitScope(
 )
 ```
 
-- `Hit.defer` — deferred hit; optional `paintOnTop: true` to paint after the scoped subtree
+- `Hit.defer` — deferred hit; optional `paintOnTop: true` to paint after the scoped subtree (uses a composited leader/follower so paint tracks scroll without a full `HitScope` repaint)
 - `Hit.before` — deferred hit and paint **under** the scoped subtree
 
 Local `hitTest` is always `false`; delivery is only via the scope.

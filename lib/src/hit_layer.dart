@@ -182,6 +182,9 @@ class RenderHitLayer extends RenderBox
   @override
   bool get deferPaintUnder => false;
 
+  @override
+  LayerLink? get deferredPaintLink => null;
+
   RenderBox? get hitRenderChild =>
       _hasHitChild && firstChild != null ? firstChild : null;
 

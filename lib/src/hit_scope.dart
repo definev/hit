@@ -107,6 +107,13 @@ class RenderHitScope extends RenderProxyBox {
   final Map<HitDeferRegistration, Rect> _aabbCache =
       <HitDeferRegistration, Rect>{};
 
+  /// Retained follower layers for [Hit.defer] `paintOnTop` targets.
+  ///
+  /// Must use [LayerHandle] so layers stay alive after being detached from the
+  /// previous frame's layer tree (a bare map lets `_parentHandle` dispose them).
+  final Map<HitDeferRegistration, LayerHandle<FollowerLayer>> _followerHandles =
+      <HitDeferRegistration, LayerHandle<FollowerLayer>>{};
+
   void _clearAabbCache() => _aabbCache.clear();
 
   void _onLinkChanged() {
@@ -120,9 +127,17 @@ class RenderHitScope extends RenderProxyBox {
     super.performLayout();
   }
 
+  void _releaseFollowerHandles() {
+    for (final LayerHandle<FollowerLayer> handle in _followerHandles.values) {
+      handle.layer = null;
+    }
+    _followerHandles.clear();
+  }
+
   @override
   void dispose() {
     _link?.removeListener(_onLinkChanged);
+    _releaseFollowerHandles();
     super.dispose();
   }
 
@@ -176,8 +191,7 @@ class RenderHitScope extends RenderProxyBox {
     return anyDeferredHit || subtreeHit;
   }
 
-  @override
-  void paint(PaintingContext context, Offset offset) {
+  void _paintDeferredUnder(PaintingContext context, Offset offset) {
     link.forEach((HitDeferRegistration target) {
       if (!target.deferPaintUnder) {
         return;
@@ -191,21 +205,72 @@ class RenderHitScope extends RenderProxyBox {
         deferChild.localToGlobal(Offset.zero, ancestor: this) + offset,
       );
     });
+  }
 
-    super.paint(context, offset);
+  void _paintDeferredOnTop(PaintingContext context, Offset offset) {
+    final Set<HitDeferRegistration> painted = <HitDeferRegistration>{};
 
     link.forEach((HitDeferRegistration target) {
       if (!target.deferPaintOnTop) {
         return;
       }
+      final LayerLink? paintLink = target.deferredPaintLink;
       final RenderBox? deferChild = target.registeredChild;
-      if (deferChild == null) {
+      if (paintLink == null || deferChild == null) {
         return;
       }
-      context.paintChild(
-        deferChild,
-        deferChild.localToGlobal(Offset.zero, ancestor: this) + offset,
+      painted.add(target);
+
+      final LayerHandle<FollowerLayer> handle = _followerHandles.putIfAbsent(
+        target,
+        () => LayerHandle<FollowerLayer>(),
+      );
+      FollowerLayer? follower = handle.layer;
+      if (follower == null) {
+        follower = FollowerLayer(
+          link: paintLink,
+          showWhenUnlinked: false,
+          linkedOffset: Offset.zero,
+          unlinkedOffset: offset,
+        );
+        handle.layer = follower;
+      } else {
+        follower
+          ..link = paintLink
+          ..showWhenUnlinked = false
+          ..linkedOffset = Offset.zero
+          ..unlinkedOffset = offset;
+      }
+
+      context.pushLayer(
+        follower,
+        (PaintingContext context, Offset offset) {
+          context.paintChild(deferChild, offset);
+        },
+        Offset.zero,
+        childPaintBounds: const Rect.fromLTRB(
+          double.negativeInfinity,
+          double.negativeInfinity,
+          double.infinity,
+          double.infinity,
+        ),
       );
     });
+
+    _followerHandles.removeWhere(
+        (HitDeferRegistration target, LayerHandle<FollowerLayer> handle) {
+      if (painted.contains(target)) {
+        return false;
+      }
+      handle.layer = null;
+      return true;
+    });
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    _paintDeferredUnder(context, offset);
+    super.paint(context, offset);
+    _paintDeferredOnTop(context, offset);
   }
 }

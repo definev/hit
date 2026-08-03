@@ -137,6 +137,9 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
     }
   }
 
+  /// Tracks this target for [HitScope]'s composited paintOnTop follower.
+  final LayerLink _paintLink = LayerLink();
+
   bool _paintOnTop;
   @override
   bool get deferPaintOnTop => _paintOnTop;
@@ -173,6 +176,9 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
   RenderBox get hitTestBox => child!;
 
   @override
+  LayerLink? get deferredPaintLink => _paintOnTop ? _paintLink : null;
+
+  @override
   Rect get deferredHitBounds {
     final RenderBox? c = child;
     if (c == null) {
@@ -192,6 +198,9 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
   void performLayout() {
     super.performLayout();
     final Size? next = child?.size;
+    if (_paintOnTop) {
+      _paintLink.leaderSize = next;
+    }
     if (attached && child != null && _lastChildSize != next) {
       _lastChildSize = next;
       if (_link.contains(this)) {
@@ -221,17 +230,35 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
   @override
   void detach() {
     _link.remove(this);
+    layer = null;
     super.detach();
   }
 
-  bool get _skipsLocalPaint => _paintOnTop || _paintUnder;
+  @override
+  bool get alwaysNeedsCompositing =>
+      _paintOnTop || super.alwaysNeedsCompositing;
 
   @override
   bool hitTest(BoxHitTestResult result, {required Offset position}) => false;
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    if (_skipsLocalPaint) {
+    if (_paintOnTop) {
+      // Leader updates with scroll / transforms; HitScope paints via FollowerLayer.
+      if (child != null) {
+        final LeaderLayer leaderLayer = layer is LeaderLayer
+            ? layer! as LeaderLayer
+            : LeaderLayer(link: _paintLink);
+        layer = leaderLayer
+          ..link = _paintLink
+          ..offset = offset;
+        context.pushLayer(leaderLayer,
+            (PaintingContext context, Offset offset) {}, Offset.zero);
+      }
+      return;
+    }
+    if (_paintUnder) {
+      // Painted under the scope subtree via [RenderHitScope] (localToGlobal).
       return;
     }
     if (child != null) {
@@ -241,10 +268,14 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
 
   @override
   void markNeedsPaint() {
-    if (_skipsLocalPaint) {
+    if (_paintUnder && !_paintOnTop) {
       _link.descendantNeedsPaint();
     } else {
       super.markNeedsPaint();
+      if (_paintOnTop) {
+        // Follower lives on the scope; keep it in sync when leader first appears.
+        _link.descendantNeedsPaint();
+      }
     }
   }
 }

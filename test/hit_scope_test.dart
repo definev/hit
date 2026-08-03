@@ -132,4 +132,80 @@ void main() {
       expect(taps, [0, 6]);
     },
   );
+
+  testWidgets(
+    'Hit.defer paintOnTop tracks scroll under HitScope',
+    (tester) async {
+      final controller = ScrollController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 200,
+              child: HitScope(
+                child: SingleChildScrollView(
+                  controller: controller,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 120),
+                      SizedBox(
+                        width: 100,
+                        height: 100,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            const Positioned.fill(
+                              child: ColoredBox(color: Colors.grey),
+                            ),
+                            Positioned(
+                              right: -10,
+                              top: -10,
+                              child: Hit.defer(
+                                paintOnTop: true,
+                                child: const ColoredBox(
+                                  key: Key('paint_on_top'),
+                                  color: Colors.red,
+                                  child: SizedBox(width: 40, height: 40),
+                                ),
+                              ),
+                            ),
+                            const Positioned(
+                              left: 0,
+                              right: 0,
+                              top: 0,
+                              bottom: 20,
+                              child: ColoredBox(color: Colors.black54),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 400),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final before = tester.getTopLeft(find.byKey(const Key('paint_on_top')));
+
+      controller.jumpTo(80);
+      await tester.pump();
+      // Second paint must reuse the follower via LayerHandle (not a disposed layer).
+      await tester.pump();
+
+      final after = tester.getTopLeft(find.byKey(const Key('paint_on_top')));
+      expect(after.dy, closeTo(before.dy - 80, 0.5));
+
+      controller.jumpTo(40);
+      await tester.pump();
+      await tester.pump();
+      final mid = tester.getTopLeft(find.byKey(const Key('paint_on_top')));
+      expect(mid.dy, closeTo(before.dy - 40, 0.5));
+    },
+  );
 }

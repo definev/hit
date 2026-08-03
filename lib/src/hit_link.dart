@@ -80,4 +80,10 @@ abstract class HitDeferRegistration {
   bool get deferPaintOnTop;
 
   bool get deferPaintUnder;
+
+  /// Leader link for composited [deferPaintOnTop] paint. Null when unused.
+  ///
+  /// [HitScope] paints a [FollowerLayer] so deferred paint tracks scroll /
+  /// transforms without requiring the scope to repaint every frame.
+  LayerLink? get deferredPaintLink;
 }

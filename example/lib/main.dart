@@ -80,7 +80,7 @@ class _HitDemoPageState extends State<HitDemoPage> {
                   sliver: SliverGrid(
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 300,
+                          maxCrossAxisExtent: 320,
                           mainAxisSpacing: 12,
                           crossAxisSpacing: 12,
                           childAspectRatio: 0.85,
