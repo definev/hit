@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:hit/hit.dart';
 
+const primaryColor = CupertinoColors.destructiveRed;
+
 void main() => runApp(const HitExampleApp());
 
 class HitExampleApp extends StatelessWidget {
@@ -12,9 +14,7 @@ class HitExampleApp extends StatelessWidget {
       title: 'hit example',
       debugShowCheckedModeBanner: false,
       theme: CupertinoThemeData(
-        primaryColor: Color(0xFF0F6B5C),
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: Color(0xFFF2F2F7),
+        primaryColor: primaryColor,
       ),
       home: HitDemoPage(),
     );
@@ -32,9 +32,14 @@ class _HitDemoPageState extends State<HitDemoPage> {
   int _iconTaps = 0;
   int _badgeTaps = 0;
   int _paintOnTopTaps = 0;
+  int _chipTaps = 0;
+  int _listTaps = 0;
   bool _showHitArea = true;
   bool _useHit = true;
   bool _settingsOpen = false;
+  double _sliderValue = 0.45;
+  Size _panelSize = const Size(140, 88);
+  double _windowWidth = 150;
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +68,8 @@ class _HitDemoPageState extends State<HitDemoPage> {
                           'Paint/layout size and hit size are separate. '
                           'Open Settings for Use hit / Show hit areas.',
                           style: text.textStyle.copyWith(
-                            color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                            color: CupertinoColors.secondaryLabel
+                                .resolveFrom(context),
                           ),
                         ),
                       ],
@@ -73,7 +79,8 @@ class _HitDemoPageState extends State<HitDemoPage> {
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 48),
                   sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 300,
                       mainAxisSpacing: 12,
                       crossAxisSpacing: 12,
@@ -83,13 +90,14 @@ class _HitDemoPageState extends State<HitDemoPage> {
                       _DemoTile(
                         title: 'HitLayer',
                         body: _useHit
-                            ? 'Icon lays out at 24×24. Hit target is 48×48 — '
+                            ? 'Icon lays out at 24x24. Hit target is 48x48 — '
                                 'neighbors stay put.'
-                            : 'Same 24×24 icon. Tap target equals paint size — '
+                            : 'Same 24x24 icon. Tap target equals paint size — '
                                 'corners outside the glyph miss.',
                         footer: '$_iconTaps taps',
                         child: ColoredBox(
-                          color: const Color(0xFFFFE082),
+                          color: CupertinoColors.secondarySystemBackground
+                              .resolveFrom(context),
                           child: Row(
                             children: [
                               if (_useHit)
@@ -102,7 +110,9 @@ class _HitDemoPageState extends State<HitDemoPage> {
                                     child: SizedBox(
                                       width: 48,
                                       height: 48,
-                                      child: _showHitArea ? const _HitGhost() : null,
+                                      child: _showHitArea
+                                          ? const _HitGhost()
+                                          : null,
                                     ),
                                   ),
                                   paintChild: const IgnorePointer(
@@ -119,9 +129,11 @@ class _HitDemoPageState extends State<HitDemoPage> {
                                     child: Stack(
                                       fit: StackFit.expand,
                                       children: [
-                                        const Icon(CupertinoIcons.add, size: 24),
+                                        const Icon(CupertinoIcons.add,
+                                            size: 24),
                                         if (_showHitArea)
-                                          const IgnorePointer(child: _HitGhost()),
+                                          const IgnorePointer(
+                                              child: _HitGhost()),
                                       ],
                                     ),
                                   ),
@@ -161,6 +173,71 @@ class _HitDemoPageState extends State<HitDemoPage> {
                           paintOnTop: true,
                           onTap: () => setState(() => _paintOnTopTaps++),
                           cover: true,
+                        ),
+                      ),
+                      _DemoTile(
+                        title: 'Chip dismiss',
+                        body: _useHit
+                            ? 'Dense chip stays tight; x hit expands to 44x44.'
+                            : 'x is only as big as the glyph — easy to miss.',
+                        footer: '$_chipTaps dismisses',
+                        child: _ChipDismiss(
+                          useHit: _useHit,
+                          showHitArea: _showHitArea,
+                          onDismiss: () => setState(() => _chipTaps++),
+                        ),
+                      ),
+                      _DemoTile(
+                        title: 'Resize handle',
+                        body: _useHit
+                            ? 'Drag the tiny grip — hit expands outside the panel.'
+                            : 'Grip hit equals paint — hard to grab and drag.',
+                        footer:
+                            '${_panelSize.width.round()}x${_panelSize.height.round()}',
+                        child: _ResizeHandle(
+                          useHit: _useHit,
+                          showHitArea: _showHitArea,
+                          size: _panelSize,
+                          onSizeChanged: (s) => setState(() => _panelSize = s),
+                        ),
+                      ),
+                      _DemoTile(
+                        title: 'Window edge',
+                        body: _useHit
+                            ? 'Drag the 1px edge — thick hit strip expands outside.'
+                            : 'Only the 1px line receives drag hits.',
+                        footer: '${_windowWidth.round()} wide',
+                        child: _WindowEdge(
+                          useHit: _useHit,
+                          showHitArea: _showHitArea,
+                          width: _windowWidth,
+                          onWidthChanged: (w) =>
+                              setState(() => _windowWidth = w),
+                        ),
+                      ),
+                      _DemoTile(
+                        title: 'List row action',
+                        body: _useHit
+                            ? 'Trailing icon sits flush; hit expands outward.'
+                            : 'Trailing icon hit equals glyph size.',
+                        footer: '$_listTaps actions',
+                        child: _ListAction(
+                          useHit: _useHit,
+                          showHitArea: _showHitArea,
+                          onTap: () => setState(() => _listTaps++),
+                        ),
+                      ),
+                      _DemoTile(
+                        title: 'Slider thumb',
+                        body: _useHit
+                            ? 'Small thumb for polish; oversized hit for scrubbing.'
+                            : 'Thumb hit equals paint — scrubbing is fiddly.',
+                        footer: '${(_sliderValue * 100).round()}%',
+                        child: _SliderThumb(
+                          useHit: _useHit,
+                          showHitArea: _showHitArea,
+                          value: _sliderValue,
+                          onChanged: (v) => setState(() => _sliderValue = v),
                         ),
                       ),
                     ]),
@@ -270,7 +347,8 @@ class _SettingsPopover extends StatelessWidget {
     return Container(
       width: 260,
       decoration: BoxDecoration(
-        color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(context),
+        color: CupertinoColors.secondarySystemGroupedBackground
+            .resolveFrom(context),
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
@@ -401,7 +479,8 @@ class _DemoTile extends StatelessWidget {
           const SizedBox(height: 16),
           Expanded(child: Align(alignment: Alignment.centerLeft, child: child)),
           const SizedBox(height: 8),
-          Text(footer, style: text.textStyle.copyWith(fontWeight: FontWeight.w600)),
+          Text(footer,
+              style: text.textStyle.copyWith(fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -498,7 +577,8 @@ class _OverflowBadge extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: CupertinoColors.black.withValues(alpha: 0.35),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(12)),
                 ),
                 child: const Center(
                   child: Text(
@@ -517,6 +597,403 @@ class _OverflowBadge extends StatelessWidget {
   }
 }
 
+/// Shared HitLayer / plain-Flutter control used by several demos.
+class _ExpandHit extends StatelessWidget {
+  const _ExpandHit({
+    required this.useHit,
+    required this.showHitArea,
+    required this.paintChild,
+    this.onTap,
+    this.hitSize = const Size(44, 44),
+    this.alignment = Alignment.center,
+    this.onPanUpdate,
+    this.cursor,
+  });
+
+  final bool useHit;
+  final bool showHitArea;
+  final VoidCallback? onTap;
+  final GestureDragUpdateCallback? onPanUpdate;
+  final Widget paintChild;
+  final Size hitSize;
+  final Alignment alignment;
+  final MouseCursor? cursor;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget interact({required Widget child}) {
+      final detector = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        onPanUpdate: onPanUpdate,
+        child: child,
+      );
+      if (cursor == null) return detector;
+      return MouseRegion(cursor: cursor!, child: detector);
+    }
+
+    if (!useHit) {
+      return interact(
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            paintChild,
+            if (showHitArea)
+              const Positioned.fill(child: IgnorePointer(child: _HitGhost())),
+          ],
+        ),
+      );
+    }
+
+    return HitLayer(
+      alignment: alignment,
+      behavior: HitTestBehavior.deferToChild,
+      hitChild: interact(
+        child: SizedBox(
+          width: hitSize.width,
+          height: hitSize.height,
+          child: showHitArea ? const _HitGhost() : null,
+        ),
+      ),
+      paintChild: IgnorePointer(child: paintChild),
+    );
+  }
+}
+
+class _ChipDismiss extends StatelessWidget {
+  const _ChipDismiss({
+    required this.useHit,
+    required this.showHitArea,
+    required this.onDismiss,
+  });
+
+  final bool useHit;
+  final bool showHitArea;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = CupertinoTheme.of(context).primaryColor;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+        decoration: BoxDecoration(
+          color: primary.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Design',
+              style: TextStyle(
+                color: primary,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(width: 2),
+            _ExpandHit(
+              useHit: useHit,
+              showHitArea: showHitArea,
+              onTap: onDismiss,
+              hitSize: const Size(44, 44),
+              paintChild: Icon(CupertinoIcons.xmark_circle_fill,
+                  size: 18, color: primary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ResizeHandle extends StatelessWidget {
+  const _ResizeHandle({
+    required this.useHit,
+    required this.showHitArea,
+    required this.size,
+    required this.onSizeChanged,
+  });
+
+  final bool useHit;
+  final bool showHitArea;
+  final Size size;
+  final ValueChanged<Size> onSizeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxW = constraints.maxWidth;
+        final maxH =
+            constraints.maxHeight.isFinite ? constraints.maxHeight : 120.0;
+        final w = size.width.clamp(72.0, maxW);
+        final h = size.height.clamp(56.0, maxH);
+
+        return Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: w,
+            height: h,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.systemGrey6.resolveFrom(context),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: CupertinoColors.separator.resolveFrom(context),
+                      ),
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text('Panel'),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: _ExpandHit(
+                    useHit: useHit,
+                    showHitArea: showHitArea,
+                    hitSize: const Size(24, 24),
+                    // Paint at top-left of hit box → hit expands outside the panel.
+                    alignment: Alignment.center,
+                    cursor: SystemMouseCursors.resizeUpLeftDownRight,
+                    onPanUpdate: (details) {
+                      onSizeChanged(
+                        Size(
+                          (w + details.delta.dx).clamp(72.0, maxW),
+                          (h + details.delta.dy).clamp(56.0, maxH),
+                        ),
+                      );
+                    },
+                    paintChild: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: CupertinoTheme.of(context).primaryColor,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(2),
+                          bottomRight: Radius.circular(4),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _WindowEdge extends StatelessWidget {
+  const _WindowEdge({
+    required this.useHit,
+    required this.showHitArea,
+    required this.width,
+    required this.onWidthChanged,
+  });
+
+  final bool useHit;
+  final bool showHitArea;
+  final double width;
+  final ValueChanged<double> onWidthChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final border = CupertinoColors.separator.resolveFrom(context);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxW = constraints.maxWidth;
+        final w = width.clamp(80.0, maxW);
+        const height = 96.0;
+
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: SizedBox(
+            width: w,
+            height: height,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color:
+                          CupertinoColors.systemBackground.resolveFrom(context),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: border, width: 1),
+                    ),
+                    child: const Center(child: Text('Window')),
+                  ),
+                ),
+                Positioned(
+                  top: 0,
+                  bottom: 0,
+                  right: 0,
+                  child: _ExpandHit(
+                    useHit: useHit,
+                    showHitArea: showHitArea,
+                    hitSize: Size(5, height),
+                    // Paint on left of hit box → hit expands outside the window.
+                    alignment: Alignment.center,
+                    cursor: SystemMouseCursors.resizeLeftRight,
+                    onPanUpdate: (details) {
+                      onWidthChanged((w + details.delta.dx).clamp(80.0, maxW));
+                    },
+                    paintChild: Container(
+                      width: 1,
+                      height: height,
+                      color: CupertinoTheme.of(context).primaryColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ListAction extends StatelessWidget {
+  const _ListAction({
+    required this.useHit,
+    required this.showHitArea,
+    required this.onTap,
+  });
+
+  final bool useHit;
+  final bool showHitArea;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemGrey6.resolveFrom(context),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text('Inbox message',
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          _ExpandHit(
+            useHit: useHit,
+            showHitArea: showHitArea,
+            onTap: onTap,
+            hitSize: const Size(44, 44),
+            paintChild: Icon(
+              CupertinoIcons.trash,
+              size: 18,
+              color: CupertinoColors.destructiveRed.resolveFrom(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SliderThumb extends StatelessWidget {
+  const _SliderThumb({
+    required this.useHit,
+    required this.showHitArea,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final bool useHit;
+  final bool showHitArea;
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = CupertinoTheme.of(context).primaryColor;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final trackWidth = constraints.maxWidth;
+        final thumbX = value.clamp(0.0, 1.0) * trackWidth;
+
+        return SizedBox(
+          height: 48,
+          width: double.infinity,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.centerLeft,
+            children: [
+              Container(
+                height: 4,
+                width: trackWidth,
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemGrey4.resolveFrom(context),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Container(
+                height: 4,
+                width: thumbX,
+                decoration: BoxDecoration(
+                  color: primary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Positioned(
+                left: thumbX - 6,
+                child: _ExpandHit(
+                  useHit: useHit,
+                  showHitArea: showHitArea,
+                  hitSize: const Size(44, 44),
+                  onTap: null,
+                  onPanUpdate: (details) {
+                    final next = ((thumbX + details.delta.dx) / trackWidth)
+                        .clamp(0.0, 1.0);
+                    onChanged(next);
+                  },
+                  paintChild: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: primary,
+                      shape: BoxShape.circle,
+                      border:
+                          Border.all(color: CupertinoColors.white, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: CupertinoColors.black.withValues(alpha: 0.15),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _HitGhost extends StatelessWidget {
   const _HitGhost({this.circular = false});
 
@@ -524,14 +1001,27 @@ class _HitGhost extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(painter: _HitGhostPainter(circular: circular));
+    final color = primaryColor.resolveFrom(context);
+    return CustomPaint(
+      painter: _HitGhostPainter(
+        circular: circular,
+        fill: color.withValues(alpha: 0.2),
+        stroke: color,
+      ),
+    );
   }
 }
 
 class _HitGhostPainter extends CustomPainter {
-  _HitGhostPainter({required this.circular});
+  _HitGhostPainter({
+    required this.circular,
+    required this.fill,
+    required this.stroke,
+  });
 
   final bool circular;
+  final Color fill;
+  final Color stroke;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -541,18 +1031,18 @@ class _HitGhostPainter extends CustomPainter {
             Radius.circular(size.shortestSide / 2),
           )
         : RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(4));
-    canvas.drawRRect(shape, Paint()..color = const Color(0x330F6B5C));
-    final stroke = Paint()
-      ..color = const Color(0xFF0F6B5C)
+    canvas.drawRRect(shape, Paint()..color = fill);
+    final paint = Paint()
+      ..color = stroke
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
+      ..strokeWidth = 0.5;
     final path = Path()..addRRect(shape.deflate(0.6));
     for (final metric in path.computeMetrics()) {
       var d = 0.0;
       while (d < metric.length) {
         canvas.drawPath(
           metric.extractPath(d, (d + 4).clamp(0, metric.length)),
-          stroke,
+          paint,
         );
         d += 7;
       }
@@ -561,5 +1051,7 @@ class _HitGhostPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _HitGhostPainter oldDelegate) =>
-      oldDelegate.circular != circular;
+      oldDelegate.circular != circular ||
+      oldDelegate.fill != fill ||
+      oldDelegate.stroke != stroke;
 }
