@@ -3,14 +3,37 @@ import 'package:flutter/widgets.dart';
 
 import 'hit_link.dart';
 
-/// Ancestor that hit-tests (and optionally paints) [Hit.defer] / [Hit.before]
-/// targets outside normal parent bounds.
+/// Ancestor that hit-tests (and optionally paints) deferred targets outside
+/// normal parent bounds.
+///
+/// Targets register via [Hit.defer], [Hit.before], or an overflowing
+/// [HitLayer]. Nesting is supported; [of] / [maybeOf] resolve to the nearest
+/// enclosing scope. Prefer many small scopes around overflow regions over one
+/// app-wide scope.
+///
+/// Pass an explicit [link] to share a registry or to let descendants register
+/// with this scope instead of a nearer one.
+///
+/// Intermediate parents above this widget (`ClipRect`, tight boxes that reject
+/// outside hits) can still block the hit-test walk even though
+/// [RenderHitScope] itself does not clip deferred hits to its size.
 class HitScope extends StatefulWidget {
+  /// Creates a scope that delivers deferred hits for [child]'s subtree.
   const HitScope({super.key, required this.child, this.link});
 
+  /// The subtree that may contain deferred hit targets.
   final Widget child;
+
+  /// Optional shared registry. When null, an internal [HitLink] is used.
   final HitLink? link;
 
+  /// The nearest enclosing [HitScopeState].
+  ///
+  /// Throws if there is no enclosing [HitScope].
+  ///
+  /// See also:
+  ///
+  ///  * [maybeOf], which returns null instead of asserting.
   static HitScopeState of(BuildContext context) {
     final inherited =
         context.dependOnInheritedWidgetOfExactType<_InheritedHitScope>();
@@ -18,7 +41,7 @@ class HitScope extends StatefulWidget {
     return inherited!.state;
   }
 
-  /// Returns null if there is no enclosing [HitScope].
+  /// The nearest enclosing [HitScopeState], or null if none exists.
   static HitScopeState? maybeOf(BuildContext context) {
     return context
         .dependOnInheritedWidgetOfExactType<_InheritedHitScope>()
@@ -29,9 +52,17 @@ class HitScope extends StatefulWidget {
   State<HitScope> createState() => HitScopeState();
 }
 
+/// State for a [HitScope].
+///
+/// Exposes [link] so descendants (and callers of [HitScope.of]) can register
+/// deferred targets on this scope's registry.
 class HitScopeState extends State<HitScope> {
   final HitLink _internalLink = HitLink();
 
+  /// The [HitLink] used by this scope.
+  ///
+  /// Returns [HitScope.link] when provided, otherwise an internal link owned
+  /// by this state.
   HitLink get link => widget.link ?? _internalLink;
 
   @override
@@ -82,12 +113,24 @@ class _HitScopeRenderObjectWidget extends SingleChildRenderObjectWidget {
   }
 }
 
+/// Render object that performs deferred hit testing and optional deferred
+/// paint for targets registered on [link].
+///
+/// Hit order: deferred targets newest-first, then the child subtree. An
+/// opaque deferred hit stops further deferred scanning but still allows the
+/// walk to return without testing remaining deferred targets.
+///
+/// Paint order: [Hit.before] targets, then the child, then [Hit.defer]
+/// `paintOnTop` targets (via retained [FollowerLayer]s).
 class RenderHitScope extends RenderProxyBox {
+  /// Creates a scope render object bound to [link].
   RenderHitScope(HitLink link, [RenderBox? child]) : super(child) {
     this.link = link;
   }
 
   HitLink? _link;
+
+  /// Registry of deferred targets hit-tested and painted by this scope.
   HitLink get link => _link!;
   set link(HitLink value) {
     if (_link != null) {

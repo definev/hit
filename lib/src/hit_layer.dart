@@ -6,6 +6,8 @@ import 'hit_scope.dart';
 
 class _HitLayerParentData extends ContainerBoxParentData<RenderBox> {}
 
+/// Separates **layout/paint size** from **hit size**.
+///
 /// Paints [paintChild] on top of [hitChild] and hit-tests both when
 /// [behavior] is [HitTestBehavior.translucent].
 ///
@@ -14,7 +16,8 @@ class _HitLayerParentData extends ContainerBoxParentData<RenderBox> {}
 ///   [paintChild] via [alignment].
 ///
 /// When [hitChild] overflows the layout box, a [HitScope] ancestor is required
-/// so Flutter will still deliver those hits.
+/// so Flutter will still deliver those hits. Non-overflowing layers stay on
+/// the normal local hit path and do not register on a [HitLink].
 ///
 /// ```dart
 /// HitScope(
@@ -30,6 +33,8 @@ class _HitLayerParentData extends ContainerBoxParentData<RenderBox> {}
 /// )
 /// ```
 class HitLayer extends MultiChildRenderObjectWidget {
+  /// Creates a layer whose layout follows [paintChild] and whose hit area
+  /// follows [hitChild].
   HitLayer({
     super.key,
     this.hitChild,
@@ -53,6 +58,11 @@ class HitLayer extends MultiChildRenderObjectWidget {
   /// Where [paintChild] sits inside the [hitChild] box (hit is placed around it).
   final AlignmentGeometry alignment;
 
+  /// How [paintChild] and [hitChild] interact during hit testing.
+  ///
+  /// - [HitTestBehavior.translucent] — test both when they overlap.
+  /// - [HitTestBehavior.deferToChild] / [HitTestBehavior.opaque] — prefer
+  ///   paint; test hit only if paint missed.
   final HitTestBehavior behavior;
 
   /// Optional link; defaults to the nearest [HitScope] when hit overflows.
@@ -87,11 +97,21 @@ class HitLayer extends MultiChildRenderObjectWidget {
   }
 }
 
+/// Render object for [HitLayer].
+///
+/// Layout size always follows the paint child. The hit child is laid out with
+/// loosened constraints and positioned so [alignment] places the paint child
+/// inside the hit box.
+///
+/// When the hit child overflows layout and a [link] is set, this object
+/// registers as a [HitDeferRegistration] and local [hitTest] returns `false`
+/// so overflow hits are delivered only through [HitScope].
 class RenderHitLayer extends RenderBox
     with
         ContainerRenderObjectMixin<RenderBox, _HitLayerParentData>,
         RenderBoxContainerDefaultsMixin<RenderBox, _HitLayerParentData>
     implements HitDeferRegistration {
+  /// Creates a hit/paint layer render object.
   RenderHitLayer({
     required AlignmentGeometry alignment,
     required HitTestBehavior behavior,
@@ -106,6 +126,8 @@ class RenderHitLayer extends RenderBox
   }
 
   HitLink? _link;
+
+  /// Registry used when the hit child overflows layout; null when unused.
   HitLink? get link => _link;
   set link(HitLink? value) {
     if (identical(_link, value)) {
@@ -121,6 +143,8 @@ class RenderHitLayer extends RenderBox
   }
 
   AlignmentGeometry _alignment;
+
+  /// Where the paint child sits inside the hit child box.
   AlignmentGeometry get alignment => _alignment;
   set alignment(AlignmentGeometry value) {
     if (_alignment == value) {
@@ -131,6 +155,8 @@ class RenderHitLayer extends RenderBox
   }
 
   HitTestBehavior _behavior;
+
+  /// How paint and hit children interact during hit testing.
   @override
   HitTestBehavior get hitBehavior => _behavior;
   set behavior(HitTestBehavior value) {
@@ -141,6 +167,8 @@ class RenderHitLayer extends RenderBox
   }
 
   bool _hasHitChild;
+
+  /// Whether a hit child is present in the child list.
   bool get hasHitChild => _hasHitChild;
   set hasHitChild(bool value) {
     if (_hasHitChild == value) {
@@ -151,6 +179,8 @@ class RenderHitLayer extends RenderBox
   }
 
   TextDirection? _textDirection;
+
+  /// Used to resolve [alignment] when it is directional.
   TextDirection? get textDirection => _textDirection;
   set textDirection(TextDirection? value) {
     if (_textDirection == value) {
@@ -185,9 +215,11 @@ class RenderHitLayer extends RenderBox
   @override
   LayerLink? get deferredPaintLink => null;
 
+  /// The hit-area child, or null when [hasHitChild] is false.
   RenderBox? get hitRenderChild =>
       _hasHitChild && firstChild != null ? firstChild : null;
 
+  /// The paint/layout child.
   RenderBox? get paintRenderChild {
     if (!_hasHitChild) {
       return firstChild;
@@ -418,6 +450,8 @@ class RenderHitLayer extends RenderBox
     return _hitTestInternal(result, position);
   }
 
+  /// Local hit test; returns `false` when overflow hits are deferred to
+  /// [HitScope].
   @override
   bool hitTest(BoxHitTestResult result, {required Offset position}) {
     // Overflow hits are delivered only via HitScope.

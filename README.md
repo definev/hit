@@ -22,7 +22,7 @@ Flutter layout and hit-testing share the same box. Growing padding to enlarge a 
 
 ```yaml
 dependencies:
-  hit: ^0.1.0
+  hit: ^0.2.0
 ```
 
 ```dart
@@ -31,26 +31,32 @@ import 'package:hit/hit.dart';
 
 ## Quick start
 
-Minimum icon with a 48×48 hit target — layout stays 24×24:
+Minimum icon with a 48×48 hit target — layout stays 24×24. Put `HitScope` on an ancestor **large enough to cover the expanded hit box** (e.g. the row or toolbar). A scope wrapped only around the tiny `HitLayer` cannot receive taps on the overflow corners — parents never hit-test outside that small box.
 
 ```dart
 HitScope(
-  child: HitLayer(
-    alignment: Alignment.center,
-    behavior: HitTestBehavior.deferToChild,
-    hitChild: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onPressed,
-      child: const SizedBox(width: 48, height: 48),
-    ),
-    paintChild: const IgnorePointer(
-      child: Icon(Icons.add, size: 24),
-    ),
+  child: Row(
+    children: [
+      HitLayer(
+        alignment: Alignment.center,
+        behavior: HitTestBehavior.deferToChild,
+        hitChild: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onPressed,
+          child: const SizedBox(width: 48, height: 48),
+        ),
+        paintChild: const IgnorePointer(
+          child: Icon(Icons.add, size: 24),
+        ),
+      ),
+      const SizedBox(width: 8),
+      const Text('New item'),
+    ],
   ),
 )
 ```
 
-Wrap a **tight** ancestor in `HitScope` whenever `hitChild` overflows `paintChild`. Without it, overflow corners never receive events.
+Whenever `hitChild` overflows `paintChild`, wrap a covering ancestor in `HitScope`. Prefer several small scopes (per row / panel) over one app-wide scope.
 
 ## API
 
@@ -80,10 +86,10 @@ HitScope(
 ```
 
 - Nesting is supported; **nearest** scope wins (`HitScope.maybeOf` / `of`).
-- Prefer many small scopes over one app-wide scope.
+- Prefer many small scopes over one app-wide scope — but each scope’s **layout box must cover** the deferred hit areas it serves.
 - Pass an explicit `link` to register with an outer scope instead of the nearest one.
 
-`RenderHitScope` does not clip deferred hits to its own size, but intermediate parents (`ClipRect`, tight boxes that reject outside hits) above the scope can still block the walk.
+`RenderHitScope` itself does not cull deferred hits to its size, but **parents only hit-test a child inside that child’s layout box**. A scope that is smaller than the overflow region will never see those events. Intermediate parents (`ClipRect`, tight boxes) above the scope can also block the walk.
 
 ### `Hit.defer` / `Hit.before`
 
