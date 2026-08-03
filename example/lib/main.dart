@@ -30,6 +30,7 @@ class _HitDemoPageState extends State<HitDemoPage> {
   int _iconTaps = 0;
   int _badgeTaps = 0;
   int _paintOnTopTaps = 0;
+  int _paintUnderTaps = 0;
   int _chipTaps = 0;
   int _listTaps = 0;
   bool _showHitArea = true;
@@ -157,7 +158,7 @@ class _HitDemoPageState extends State<HitDemoPage> {
                         child: _OverflowBadge(
                           useHit: _useHit,
                           showHitArea: _showHitArea,
-                          paintOnTop: false,
+                          paint: _DeferPaint.none,
                           onTap: () => setState(() => _badgeTaps++),
                         ),
                       ),
@@ -169,11 +170,30 @@ class _HitDemoPageState extends State<HitDemoPage> {
                             : 'A cover sits above the badge in the tree. '
                                   'Without paintOnTop the badge stays buried.',
                         footer: '$_paintOnTopTaps taps',
+                        // HitScope wraps the whole tile so the hanging badge
+                        // stays inside scope layout (tile padding absorbs -12).
+                        scope: true,
                         child: _OverflowBadge(
                           useHit: _useHit,
                           showHitArea: _showHitArea,
-                          paintOnTop: true,
+                          paint: _DeferPaint.onTop,
                           onTap: () => setState(() => _paintOnTopTaps++),
+                          cover: true,
+                        ),
+                      ),
+                      _DemoTile(
+                        title: 'Hit.before · paintUnder',
+                        body: _useHit
+                            ? 'Badge is last in the stack but Hit.before '
+                                  'paints it under the whole scope.'
+                            : 'Badge is last in the stack — it paints on top.',
+                        footer: '$_paintUnderTaps taps',
+                        scope: true,
+                        child: _OverflowBadge(
+                          useHit: _useHit,
+                          showHitArea: _showHitArea,
+                          paint: _DeferPaint.under,
+                          onTap: () => setState(() => _paintUnderTaps++),
                           cover: true,
                         ),
                       ),
@@ -442,17 +462,19 @@ class _DemoTile extends StatelessWidget {
     required this.body,
     required this.footer,
     required this.child,
+    this.scope = false,
   });
 
   final String title;
   final String body;
   final String footer;
   final Widget child;
+  final bool scope;
 
   @override
   Widget build(BuildContext context) {
     final text = CupertinoTheme.of(context).textTheme;
-    return Container(
+    Widget tile = Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: CupertinoColors.systemBackground.resolveFrom(context),
@@ -491,21 +513,27 @@ class _DemoTile extends StatelessWidget {
         ],
       ),
     );
+    if (scope) {
+      tile = HitScope(child: tile);
+    }
+    return tile;
   }
 }
+
+enum _DeferPaint { none, onTop, under }
 
 class _OverflowBadge extends StatelessWidget {
   const _OverflowBadge({
     required this.useHit,
     required this.showHitArea,
-    required this.paintOnTop,
+    required this.paint,
     required this.onTap,
     this.cover = false,
   });
 
   final bool useHit;
   final bool showHitArea;
-  final bool paintOnTop;
+  final _DeferPaint paint;
   final VoidCallback onTap;
   final bool cover;
 
@@ -543,60 +571,86 @@ class _OverflowBadge extends StatelessWidget {
     );
 
     if (useHit) {
-      badge = Hit.defer(
-        paintOnTop: paintOnTop,
-        behavior: HitTestBehavior.opaque,
-        child: badge,
-      );
+      badge = switch (paint) {
+        _DeferPaint.onTop => Hit.defer(
+            paintOnTop: true,
+            behavior: HitTestBehavior.opaque,
+            child: badge,
+          ),
+        _DeferPaint.under => Hit.before(
+            behavior: HitTestBehavior.opaque,
+            child: badge,
+          ),
+        _DeferPaint.none => Hit.defer(
+            behavior: HitTestBehavior.opaque,
+            child: badge,
+          ),
+      };
     }
+
+    final coverLayer = cover
+        ? Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 28,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: CupertinoColors.black.withValues(alpha: 0.35),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  paint == _DeferPaint.under ? 'over badge' : 'cover',
+                  style: const TextStyle(
+                    color: CupertinoColors.white,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+          )
+        : null;
+
+    // paintUnder: badge last in the tree so without Hit.before it paints on top.
+    // paintOnTop: badge first so without paintOnTop the cover buries it.
+    final List<Widget> stackChildren = [
+      Positioned.fill(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemGrey6.resolveFrom(context),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: CupertinoColors.separator.resolveFrom(context),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Text(
+              cover
+                  ? (paint == _DeferPaint.under ? 'Foreground card' : 'Covered card')
+                  : 'Card',
+            ),
+          ),
+        ),
+      ),
+      if (paint == _DeferPaint.under) ...[
+        ?coverLayer,
+        Positioned(right: -12, top: -12, child: badge),
+      ] else ...[
+        Positioned(right: -12, top: -12, child: badge),
+        ?coverLayer,
+      ],
+    ];
 
     return SizedBox(
       width: double.infinity,
       height: 110,
       child: Stack(
         clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: CupertinoColors.systemGrey6.resolveFrom(context),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: CupertinoColors.separator.resolveFrom(context),
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Text(cover ? 'Covered card' : 'Card'),
-              ),
-            ),
-          ),
-          Positioned(right: -12, top: -12, child: badge),
-          if (cover)
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              bottom: 28,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: CupertinoColors.black.withValues(alpha: 0.35),
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(12),
-                  ),
-                ),
-                child: const Center(
-                  child: Text(
-                    'cover',
-                    style: TextStyle(
-                      color: CupertinoColors.white,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
+        children: stackChildren,
       ),
     );
   }
@@ -770,7 +824,7 @@ class _ResizeHandle extends StatelessWidget {
                   child: _ExpandHit(
                     useHit: useHit,
                     showHitArea: showHitArea,
-                    hitSize: const Size(24, 24),
+                    hitSize: const Size(30, 30),
                     // Paint at top-left of hit box → hit expands outside the panel.
                     alignment: Alignment.center,
                     cursor: SystemMouseCursors.resizeUpLeftDownRight,
@@ -854,7 +908,7 @@ class _WindowEdge extends StatelessWidget {
                   child: _ExpandHit(
                     useHit: useHit,
                     showHitArea: showHitArea,
-                    hitSize: Size(5, height),
+                    hitSize: Size(16, height),
                     // Paint on left of hit box → hit expands outside the window.
                     alignment: Alignment.center,
                     cursor: SystemMouseCursors.resizeLeftRight,
