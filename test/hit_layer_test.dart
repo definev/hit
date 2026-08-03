@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hit/hit.dart';
+import 'package:hit/src/hit_layer.dart';
 
 Widget _box({double w = 40, double h = 40, Color color = Colors.blue}) {
   return ColoredBox(

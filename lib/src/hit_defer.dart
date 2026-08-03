@@ -29,9 +29,10 @@ abstract final class Hit {
   /// [link] defaults to [HitScope.of]'s link. Pass an explicit [HitLink] to
   /// register with a non-nearest scope.
   ///
-  /// [behavior] controls how this target interacts with other deferred targets
-  /// during the scope's hit walk ([HitTestBehavior.opaque] stops further
-  /// deferred scanning after a hit).
+  /// [behavior] defaults to [HitTestBehavior.translucent]. During the scope's
+  /// newest-first deferred walk, [HitTestBehavior.opaque] stops further
+  /// deferred scanning **and** skips hit-testing the scoped subtree.
+  /// [HitTestBehavior.translucent] still allows the subtree walk after a hit.
   static Widget defer({
     Key? key,
     required Widget child,
@@ -51,11 +52,14 @@ abstract final class Hit {
 
   /// Defers hit testing of [child] and paints it under the [HitScope] subtree.
   ///
-  /// Paint is performed by [RenderHitScope] using
-  /// [RenderBox.localToGlobal], so the child does not paint at its local
-  /// position. Hit delivery is the same as [defer].
+  /// Paint is performed by the enclosing HitScope using
+  /// [RenderBox.localToGlobal] each paint, so the scope must repaint when the
+  /// target scrolls or transforms. Prefer [defer] with [paintOnTop] when paint
+  /// should track scroll via a composited follower without a full scope
+  /// repaint.
   ///
-  /// [link] and [behavior] have the same meaning as in [defer].
+  /// Hit delivery is the same as [defer]. [link] and [behavior] have the same
+  /// meaning as in [defer] (default [HitTestBehavior.translucent]).
   static Widget before({
     Key? key,
     required Widget child,
@@ -139,8 +143,8 @@ class _HitDeferRenderObjectWidget extends SingleChildRenderObjectWidget {
 /// Render object for [Hit.defer] / [Hit.before].
 ///
 /// Registers on [link] while attached, skips local hit testing, and optionally
-/// defers paint to [RenderHitScope] when [deferPaintOnTop] or [deferPaintUnder]
-/// is set.
+/// defers paint to the enclosing [HitScope] when [deferPaintOnTop] or
+/// [deferPaintUnder] is set.
 class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
   /// Creates a deferred hit target bound to [link].
   RenderHitDefer({

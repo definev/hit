@@ -16,7 +16,7 @@ import 'hit_link.dart';
 ///
 /// Intermediate parents above this widget (`ClipRect`, tight boxes that reject
 /// outside hits) can still block the hit-test walk even though
-/// [RenderHitScope] itself does not clip deferred hits to its size.
+/// HitScope itself does not clip deferred hits to its size.
 class HitScope extends StatefulWidget {
   /// Creates a scope that delivers deferred hits for [child]'s subtree.
   const HitScope({super.key, required this.child, this.link});
@@ -29,19 +29,36 @@ class HitScope extends StatefulWidget {
 
   /// The nearest enclosing [HitScopeState].
   ///
-  /// Throws if there is no enclosing [HitScope].
+  /// Throws a [FlutterError] if there is no enclosing [HitScope].
   ///
   /// See also:
   ///
-  ///  * [maybeOf], which returns null instead of asserting.
+  ///  * [maybeOf], which returns null instead of throwing.
   static HitScopeState of(BuildContext context) {
     final inherited =
         context.dependOnInheritedWidgetOfExactType<_InheritedHitScope>();
-    assert(inherited != null, 'HitScope was not found above this context.');
-    return inherited!.state;
+    if (inherited == null) {
+      throw FlutterError.fromParts(<DiagnosticsNode>[
+        ErrorSummary(
+          'HitScope.of() called with a context that does not contain a HitScope.',
+        ),
+        ErrorDescription(
+          'No HitScope ancestor could be found starting from the context '
+          'that was passed to HitScope.of().',
+        ),
+        ErrorHint(
+          'Hit.defer / Hit.before and overflowing HitLayer widgets require a '
+          'HitScope ancestor whose layout box covers the deferred hit area.',
+        ),
+        context.describeElement('The context used was'),
+      ]);
+    }
+    return inherited.state;
   }
 
   /// The nearest enclosing [HitScopeState], or null if none exists.
+  ///
+  /// Prefer this over [of] when a missing scope is an allowed state.
   static HitScopeState? maybeOf(BuildContext context) {
     return context
         .dependOnInheritedWidgetOfExactType<_InheritedHitScope>()
@@ -213,6 +230,12 @@ class RenderHitScope extends RenderProxyBox {
     );
   }
 
+  /// Hit-tests deferred targets (newest first), then the scoped subtree.
+  ///
+  /// When a deferred target with [HitTestBehavior.opaque] hits, scanning
+  /// stops and the scoped subtree is **not** hit-tested.
+  ///
+  /// [HitTestBehavior.translucent] deferred hits still allow the subtree walk.
   @override
   bool hitTest(BoxHitTestResult result, {required Offset position}) {
     // Scroll / transform changes skip [performLayout] on this scope.

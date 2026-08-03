@@ -19,6 +19,7 @@ class HitLink extends ChangeNotifier {
   ///
   /// Hit-testing walks targets newest-first via [forEachReversed] /
   /// [anyReversed]; registration order is oldest-first.
+  @visibleForTesting
   List<HitDeferRegistration> get targets =>
       List<HitDeferRegistration>.unmodifiable(_targets);
 
@@ -27,8 +28,8 @@ class HitLink extends ChangeNotifier {
 
   /// Notifies listeners that a deferred descendant needs to be painted.
   ///
-  /// Used by paint-deferred targets so [RenderHitScope] can repaint without
-  /// the target painting locally.
+  /// Used by paint-deferred targets so the enclosing HitScope can repaint
+  /// without the target painting locally.
   void descendantNeedsPaint() => notifyListeners();
 
   /// Notifies listeners that registered targets' bounds or transforms may
@@ -89,8 +90,8 @@ class HitLink extends ChangeNotifier {
 /// Contract implemented by render objects that participate in deferred hit
 /// testing and optional deferred paint.
 ///
-/// Implemented by [RenderHitDefer] and by [RenderHitLayer] when its hit child
-/// overflows layout size.
+/// Implemented by deferred hit targets (`Hit.defer` / `Hit.before`) and by
+/// [HitLayer] when its hit child overflows layout size.
 abstract class HitDeferRegistration {
   /// Box used for deferred paint positioning; null if this target does not
   /// paint through the scope.
@@ -113,7 +114,8 @@ abstract class HitDeferRegistration {
   /// How this target participates in the [HitScope] deferred hit walk.
   ///
   /// When [HitTestBehavior.opaque] and this target hits, the scope stops
-  /// scanning further deferred targets.
+  /// scanning further deferred targets **and** does not hit-test the scoped
+  /// subtree. [HitTestBehavior.translucent] still allows the subtree walk.
   HitTestBehavior get hitBehavior;
 
   /// Whether [HitScope] should paint this target after the scoped subtree.

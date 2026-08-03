@@ -573,18 +573,18 @@ class _OverflowBadge extends StatelessWidget {
     if (useHit) {
       badge = switch (paint) {
         _DeferPaint.onTop => Hit.defer(
-            paintOnTop: true,
-            behavior: HitTestBehavior.opaque,
-            child: badge,
-          ),
+          paintOnTop: true,
+          behavior: HitTestBehavior.opaque,
+          child: badge,
+        ),
         _DeferPaint.under => Hit.before(
-            behavior: HitTestBehavior.opaque,
-            child: badge,
-          ),
+          behavior: HitTestBehavior.opaque,
+          child: badge,
+        ),
         _DeferPaint.none => Hit.defer(
-            behavior: HitTestBehavior.opaque,
-            child: badge,
-          ),
+          behavior: HitTestBehavior.opaque,
+          child: badge,
+        ),
       };
     }
 
@@ -630,7 +630,9 @@ class _OverflowBadge extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             child: Text(
               cover
-                  ? (paint == _DeferPaint.under ? 'Foreground card' : 'Covered card')
+                  ? (paint == _DeferPaint.under
+                        ? 'Foreground card'
+                        : 'Covered card')
                   : 'Card',
             ),
           ),
@@ -648,10 +650,7 @@ class _OverflowBadge extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       height: 110,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: stackChildren,
-      ),
+      child: Stack(clipBehavior: Clip.none, children: stackChildren),
     );
   }
 }
