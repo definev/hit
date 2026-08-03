@@ -1,0 +1,20 @@
+name: hit_example
+description: Demo for the hit package.
+publish_to: none
+
+environment:
+  sdk: ^3.13.0-282.1.beta
+  flutter: ">=3.47.0-1.0.pre-10"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  hit:
+    path: ..
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
