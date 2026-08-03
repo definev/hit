@@ -115,11 +115,11 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
     required bool paintUnder,
     required HitTestBehavior behavior,
     RenderBox? child,
-  }) : _link = link,
-       _paintOnTop = paintOnTop,
-       _paintUnder = paintUnder,
-       _behavior = behavior,
-       super(child);
+  })  : _link = link,
+        _paintOnTop = paintOnTop,
+        _paintUnder = paintUnder,
+        _behavior = behavior,
+        super(child);
 
   HitLink _link;
   HitLink get link => _link;

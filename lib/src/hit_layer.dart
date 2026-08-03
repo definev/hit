@@ -38,11 +38,11 @@ class HitLayer extends MultiChildRenderObjectWidget {
     this.link,
     required this.paintChild,
   }) : super(
-         children: <Widget>[
-           if (hitChild != null) hitChild,
-           paintChild,
-         ],
-       );
+          children: <Widget>[
+            if (hitChild != null) hitChild,
+            paintChild,
+          ],
+        );
 
   /// Gesture / hover layer. Sized independently; may overflow layout.
   final Widget? hitChild;
@@ -98,10 +98,10 @@ class RenderHitLayer extends RenderBox
     required bool hasHitChild,
     TextDirection? textDirection,
     HitLink? link,
-  }) : _alignment = alignment,
-       _behavior = behavior,
-       _hasHitChild = hasHitChild,
-       _textDirection = textDirection {
+  })  : _alignment = alignment,
+        _behavior = behavior,
+        _hasHitChild = hasHitChild,
+        _textDirection = textDirection {
     this.link = link;
   }
 
@@ -374,8 +374,7 @@ class RenderHitLayer extends RenderBox
   bool _hitTestInternal(BoxHitTestResult result, Offset position) {
     final RenderBox? hit = hitRenderChild;
     final bool inLayout = (Offset.zero & size).contains(position);
-    final bool inHit =
-        hit != null &&
+    final bool inHit = hit != null &&
         ((hit.parentData! as _HitLayerParentData).offset & hit.size).contains(
           position,
         );

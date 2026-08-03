@@ -13,9 +13,7 @@ class HitExampleApp extends StatelessWidget {
     return const CupertinoApp(
       title: 'hit example',
       debugShowCheckedModeBanner: false,
-      theme: CupertinoThemeData(
-        primaryColor: primaryColor,
-      ),
+      theme: CupertinoThemeData(primaryColor: primaryColor),
       home: HitDemoPage(),
     );
   }
@@ -68,8 +66,9 @@ class _HitDemoPageState extends State<HitDemoPage> {
                           'Paint/layout size and hit size are separate. '
                           'Open Settings for Use hit / Show hit areas.',
                           style: text.textStyle.copyWith(
-                            color: CupertinoColors.secondaryLabel
-                                .resolveFrom(context),
+                            color: CupertinoColors.secondaryLabel.resolveFrom(
+                              context,
+                            ),
                           ),
                         ),
                       ],
@@ -81,19 +80,19 @@ class _HitDemoPageState extends State<HitDemoPage> {
                   sliver: SliverGrid(
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 300,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 0.85,
-                    ),
+                          maxCrossAxisExtent: 300,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 0.85,
+                        ),
                     delegate: SliverChildListDelegate([
                       _DemoTile(
                         title: 'HitLayer',
                         body: _useHit
                             ? 'Icon lays out at 24x24. Hit target is 48x48 — '
-                                'neighbors stay put.'
+                                  'neighbors stay put.'
                             : 'Same 24x24 icon. Tap target equals paint size — '
-                                'corners outside the glyph miss.',
+                                  'corners outside the glyph miss.',
                         footer: '$_iconTaps taps',
                         child: ColoredBox(
                           color: CupertinoColors.secondarySystemBackground
@@ -129,11 +128,14 @@ class _HitDemoPageState extends State<HitDemoPage> {
                                     child: Stack(
                                       fit: StackFit.expand,
                                       children: [
-                                        const Icon(CupertinoIcons.add,
-                                            size: 24),
+                                        const Icon(
+                                          CupertinoIcons.add,
+                                          size: 24,
+                                        ),
                                         if (_showHitArea)
                                           const IgnorePointer(
-                                              child: _HitGhost()),
+                                            child: _HitGhost(),
+                                          ),
                                       ],
                                     ),
                                   ),
@@ -148,9 +150,9 @@ class _HitDemoPageState extends State<HitDemoPage> {
                         title: 'Hit.defer',
                         body: _useHit
                             ? 'Badge hangs outside the card. '
-                                'HitScope still delivers the tap.'
+                                  'HitScope still delivers the tap.'
                             : 'Badge hangs outside the card. '
-                                'Taps outside the parent bounds miss.',
+                                  'Taps outside the parent bounds miss.',
                         footer: '$_badgeTaps taps',
                         child: _OverflowBadge(
                           useHit: _useHit,
@@ -163,9 +165,9 @@ class _HitDemoPageState extends State<HitDemoPage> {
                         title: 'Hit.defer · paintOnTop',
                         body: _useHit
                             ? 'A cover sits above the badge in the tree. '
-                                'paintOnTop still draws the badge last.'
+                                  'paintOnTop still draws the badge last.'
                             : 'A cover sits above the badge in the tree. '
-                                'Without paintOnTop the badge stays buried.',
+                                  'Without paintOnTop the badge stays buried.',
                         footer: '$_paintOnTopTaps taps',
                         child: _OverflowBadge(
                           useHit: _useHit,
@@ -347,8 +349,9 @@ class _SettingsPopover extends StatelessWidget {
     return Container(
       width: 260,
       decoration: BoxDecoration(
-        color: CupertinoColors.secondarySystemGroupedBackground
-            .resolveFrom(context),
+        color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+          context,
+        ),
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
@@ -477,10 +480,14 @@ class _DemoTile extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Expanded(child: Align(alignment: Alignment.centerLeft, child: child)),
+          Expanded(
+            child: Align(alignment: Alignment.centerLeft, child: child),
+          ),
           const SizedBox(height: 8),
-          Text(footer,
-              style: text.textStyle.copyWith(fontWeight: FontWeight.w600)),
+          Text(
+            footer,
+            style: text.textStyle.copyWith(fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );
@@ -520,10 +527,7 @@ class _OverflowBadge extends StatelessWidget {
               decoration: BoxDecoration(
                 color: primary,
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: CupertinoColors.white,
-                  width: 3,
-                ),
+                border: Border.all(color: CupertinoColors.white, width: 3),
               ),
               child: const Icon(
                 CupertinoIcons.add,
@@ -577,8 +581,9 @@ class _OverflowBadge extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: CupertinoColors.black.withValues(alpha: 0.35),
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(12)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(12),
+                  ),
                 ),
                 child: const Center(
                   child: Text(
@@ -699,8 +704,11 @@ class _ChipDismiss extends StatelessWidget {
               showHitArea: showHitArea,
               onTap: onDismiss,
               hitSize: const Size(44, 44),
-              paintChild: Icon(CupertinoIcons.xmark_circle_fill,
-                  size: 18, color: primary),
+              paintChild: Icon(
+                CupertinoIcons.xmark_circle_fill,
+                size: 18,
+                color: primary,
+              ),
             ),
           ],
         ),
@@ -727,8 +735,9 @@ class _ResizeHandle extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxW = constraints.maxWidth;
-        final maxH =
-            constraints.maxHeight.isFinite ? constraints.maxHeight : 120.0;
+        final maxH = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : 120.0;
         final w = size.width.clamp(72.0, maxW);
         final h = size.height.clamp(56.0, maxH);
 
@@ -829,8 +838,9 @@ class _WindowEdge extends StatelessWidget {
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color:
-                          CupertinoColors.systemBackground.resolveFrom(context),
+                      color: CupertinoColors.systemBackground.resolveFrom(
+                        context,
+                      ),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: border, width: 1),
                     ),
@@ -890,8 +900,11 @@ class _ListAction extends StatelessWidget {
       child: Row(
         children: [
           const Expanded(
-            child: Text('Inbox message',
-                maxLines: 1, overflow: TextOverflow.ellipsis),
+            child: Text(
+              'Inbox message',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           _ExpandHit(
             useHit: useHit,
@@ -973,8 +986,10 @@ class _SliderThumb extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: primary,
                       shape: BoxShape.circle,
-                      border:
-                          Border.all(color: CupertinoColors.white, width: 2),
+                      border: Border.all(
+                        color: CupertinoColors.white,
+                        width: 2,
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: CupertinoColors.black.withValues(alpha: 0.15),

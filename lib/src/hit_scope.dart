@@ -12,8 +12,8 @@ class HitScope extends StatefulWidget {
   final HitLink? link;
 
   static HitScopeState of(BuildContext context) {
-    final inherited = context
-        .dependOnInheritedWidgetOfExactType<_InheritedHitScope>();
+    final inherited =
+        context.dependOnInheritedWidgetOfExactType<_InheritedHitScope>();
     assert(inherited != null, 'HitScope was not found above this context.');
     return inherited!.state;
   }
