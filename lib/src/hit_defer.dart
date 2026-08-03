@@ -110,12 +110,16 @@ class _HitDeferRenderObjectWidget extends SingleChildRenderObjectWidget {
 
 class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
   RenderHitDefer({
-    required this._link,
-    required this._paintOnTop,
-    required this._paintUnder,
-    required this._behavior,
+    required HitLink link,
+    required bool paintOnTop,
+    required bool paintUnder,
+    required HitTestBehavior behavior,
     RenderBox? child,
-  }) : super(child);
+  }) : _link = link,
+       _paintOnTop = paintOnTop,
+       _paintUnder = paintUnder,
+       _behavior = behavior,
+       super(child);
 
   HitLink _link;
   HitLink get link => _link;

@@ -37,7 +37,12 @@ class HitLayer extends MultiChildRenderObjectWidget {
     this.behavior = HitTestBehavior.opaque,
     this.link,
     required this.paintChild,
-  }) : super(children: <Widget>[?hitChild, paintChild]);
+  }) : super(
+         children: <Widget>[
+           if (hitChild != null) hitChild,
+           paintChild,
+         ],
+       );
 
   /// Gesture / hover layer. Sized independently; may overflow layout.
   final Widget? hitChild;
@@ -88,12 +93,15 @@ class RenderHitLayer extends RenderBox
         RenderBoxContainerDefaultsMixin<RenderBox, _HitLayerParentData>
     implements HitDeferRegistration {
   RenderHitLayer({
-    required this._alignment,
-    required this._behavior,
-    required this._hasHitChild,
-    this._textDirection,
+    required AlignmentGeometry alignment,
+    required HitTestBehavior behavior,
+    required bool hasHitChild,
+    TextDirection? textDirection,
     HitLink? link,
-  }) {
+  }) : _alignment = alignment,
+       _behavior = behavior,
+       _hasHitChild = hasHitChild,
+       _textDirection = textDirection {
     this.link = link;
   }
 
