@@ -39,7 +39,7 @@ class HitLayer extends MultiChildRenderObjectWidget {
     super.key,
     this.hitChild,
     this.alignment = Alignment.center,
-    this.behavior = HitTestBehavior.opaque,
+    this.behavior = HitTestBehavior.translucent,
     this.link,
     required this.paintChild,
   }) : super(
