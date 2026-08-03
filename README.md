@@ -22,8 +22,7 @@ Flutter layout and hit-testing share the same box. Growing padding to enlarge a 
 
 ```yaml
 dependencies:
-  hit:
-    path: ../hit   # or your local path / git dependency
+  hit: ^0.1.0
 ```
 
 ```dart
@@ -38,7 +37,7 @@ Minimum icon with a 48×48 hit target — layout stays 24×24:
 HitScope(
   child: HitLayer(
     alignment: Alignment.center,
-    behavior: HitBehavior.deferToChild,
+    behavior: HitTestBehavior.deferToChild,
     hitChild: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onPressed,
@@ -62,7 +61,7 @@ Two-child render object:
 - **`paintChild`** — visual layer; defines layout size
 - **`hitChild`** — gesture / hover layer; may be larger
 - **`alignment`** — where paint sits inside the hit box (`Alignment.center` by default)
-- **`behavior`** — how paint and hit interact (`HitBehavior`)
+- **`behavior`** — how paint and hit interact (`HitTestBehavior`)
 - **`link`** — optional `HitLink`; defaults to the nearest `HitScope`
 
 When `hitChild` overflows layout, the layer registers on the link and local `hitTest` returns `false` so Flutter does not clip overflow away. Hits are delivered through `HitScope`.
@@ -119,7 +118,7 @@ HitScope(
 
 Local `hitTest` is always `false`; delivery is only via the scope.
 
-### `HitBehavior`
+### `HitTestBehavior`
 
 | Value | Meaning |
 | --- | --- |
@@ -155,4 +154,4 @@ Demos include icon buttons, resize handles, window edges, chip/tab dismiss, list
 
 ## License
 
-See the repository root.
+MIT — see [LICENSE](LICENSE).
