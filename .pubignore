@@ -1,0 +1,36 @@
+# Tooling / IDE
+.dart_tool/
+.idea/
+*.iml
+.metadata
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+.widget_preview/
+
+# Build / generated
+build/
+coverage/
+**/doc/api/
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+app.*.symbols
+app.*.map.json
+
+# Library packages should not ship lockfiles
+pubspec.lock
+example/pubspec.lock
+
+# Example platform runners — keep example/lib + pubspec only
+example/android/
+example/ios/
+example/linux/
+example/macos/
+example/windows/
+example/web/
+example/test/
+example/*.iml
+example/analysis_options.yaml
