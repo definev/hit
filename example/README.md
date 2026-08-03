@@ -1,17 +1,11 @@
-# hit_example
+# hit example
 
-A new Flutter project.
+One-page demo of the two patterns you use day-to-day:
 
-## Getting Started
+1. **`HitLayer`** — small paint, larger hit (icon button)
+2. **`Hit.defer`** — control hanging outside its parent
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+cd example
+flutter run
+```

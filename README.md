@@ -145,12 +145,12 @@ A handful of min-target / edge / handle layers is cheap. Hundreds of deferred ta
 
 ## Example
 
+One-page demo covering `HitLayer` (small paint / large hit) and `Hit.defer` (overflow control):
+
 ```bash
 cd example
 flutter run
 ```
-
-Demos include icon buttons, resize handles, window edges, chip/tab dismiss, list/sliver row actions, dense toolbars, slider thumbs, and `Hit.defer` overflow.
 
 ## License
 
