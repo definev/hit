@@ -1,7 +1,7 @@
 # hit
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/definev/hit/main/assets/banner.png" alt="hit — expand touch targets without growing layout" width="420" />
+  <img src="https://raw.githubusercontent.com/definev/hit/main/assets/banner.png" alt="hit — expand touch targets without growing layout" />
 </p>
 
 Separate **paint/layout size** from **hit size** in Flutter, and deliver taps that fall outside a widget’s layout box.
