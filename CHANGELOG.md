@@ -1,3 +1,8 @@
+## 0.3.1
+
+- Add package banner and `screenshots` for pub.dev display.
+- Point README banner at an absolute GitHub raw URL so it renders on pub.dev.
+
 ## 0.3.0
 
 - Narrow the supported public API: `package:hit/hit.dart` exports widgets and
