@@ -5,6 +5,8 @@
 //
 //   dart run benchmark/hit_link_bench.dart
 
+// ignore_for_file: avoid_print
+
 import 'dart:collection';
 import 'dart:math' as math;
 
