@@ -1,5 +1,3 @@
-# hit
-
 <p align="center">
   <img src="https://raw.githubusercontent.com/definev/hit/main/assets/banner.png" alt="hit — expand touch targets without growing layout" />
 </p>
