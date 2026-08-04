@@ -1,3 +1,8 @@
+## 1.2.2
+
+- Reorganize README for a beginner-first path: install → quick start →
+  common mistakes → patterns → API / debugging / migration.
+
 ## 1.2.1
 
 - Add `debugPaintHitAreas` — when enabled (or when Flutter's
