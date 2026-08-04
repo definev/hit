@@ -208,4 +208,118 @@ void main() {
       expect(mid.dy, closeTo(before.dy - 40, 0.5));
     },
   );
+
+  testWidgets('swapping HitScope.link migrates deferred targets', (
+    tester,
+  ) async {
+    final linkA = HitLink();
+    final linkB = HitLink();
+    var useA = true;
+    var tapped = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            return HitScope(
+              link: useA ? linkA : linkB,
+              child: Center(
+                child: SizedBox(
+                  width: 100,
+                  height: 100,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned(
+                        bottom: -30,
+                        child: Hit.defer(
+                          child: GestureDetector(
+                            key: const Key('defer_btn'),
+                            onTap: () => tapped = true,
+                            child: const ColoredBox(
+                              color: Colors.blue,
+                              child: SizedBox(width: 60, height: 30),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.topCenter,
+                        child: TextButton(
+                          key: const Key('swap'),
+                          onPressed: () => setState(() => useA = !useA),
+                          child: const Text('swap'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(linkA.targets, hasLength(1));
+    expect(linkB.targets, isEmpty);
+
+    await tester.tap(find.byKey(const Key('swap')));
+    await tester.pump();
+
+    expect(linkA.targets, isEmpty);
+    expect(linkB.targets, hasLength(1));
+
+    await tester.tap(find.byKey(const Key('defer_btn')));
+    await tester.pump();
+    expect(tapped, isTrue);
+  });
+
+  testWidgets('HitScope reuses internal link when external link cleared', (
+    tester,
+  ) async {
+    final external = HitLink();
+    HitLink? provided = external;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            return HitScope(
+              link: provided,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Hit.defer(
+                      child: const ColoredBox(
+                        color: Colors.blue,
+                        child: SizedBox(width: 10, height: 10),
+                      ),
+                    ),
+                    TextButton(
+                      key: const Key('clear'),
+                      onPressed: () => setState(() => provided = null),
+                      child: const Text('clear'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(external.targets, hasLength(1));
+
+    await tester.tap(find.byKey(const Key('clear')));
+    await tester.pump();
+
+    expect(external.targets, isEmpty);
+    final internal = tester.state<HitScopeState>(find.byType(HitScope)).link;
+    expect(identical(internal, external), isFalse);
+    expect(internal.targets, hasLength(1));
+  });
 }

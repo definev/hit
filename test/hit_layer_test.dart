@@ -116,4 +116,65 @@ void main() {
     expect(paintTapped, isTrue);
     expect(hitTapped, isFalse);
   });
+
+  testWidgets(
+    'overflow without HitScope rejects positions outside layout',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: HitLayer(
+              alignment: Alignment.center,
+              hitChild: Listener(
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: (_) {},
+                child: const SizedBox(width: 48, height: 48),
+              ),
+              paintChild: Listener(
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: (_) {},
+                child: const SizedBox(width: 24, height: 24),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Debug asserts that a missing HitScope is a configuration error.
+      final Object? error = tester.takeException();
+      expect(error, isA<FlutterError>());
+      expect('$error', contains('HitScope'));
+
+      final RenderHitLayer layer = tester.renderObject(find.byType(HitLayer));
+      expect(layer.size, const Size(24, 24));
+
+      final BoxHitTestResult inside = BoxHitTestResult();
+      expect(layer.hitTest(inside, position: const Offset(12, 12)), isTrue);
+
+      final BoxHitTestResult outside = BoxHitTestResult();
+      expect(layer.hitTest(outside, position: const Offset(-10, 12)), isFalse);
+    },
+  );
+
+  testWidgets('computeDryLayout follows paintChild', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HitScope(
+          child: Center(
+            child: HitLayer(
+              hitChild: const SizedBox(width: 80, height: 80),
+              paintChild: const SizedBox(width: 24, height: 36),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final RenderHitLayer layer = tester.renderObject(find.byType(HitLayer));
+    expect(
+      layer.getDryLayout(const BoxConstraints()),
+      const Size(24, 36),
+    );
+  });
 }

@@ -219,7 +219,7 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
   RenderBox? get registeredChild => child;
 
   @override
-  RenderBox get hitTestBox => child!;
+  RenderBox get hitTestBox => child ?? this;
 
   @override
   LayerLink? get deferredPaintLink => _paintOnTop ? _paintLink : null;
@@ -235,7 +235,11 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
 
   @override
   bool hitTestDeferred(BoxHitTestResult result, Offset position) {
-    return child!.hitTest(result, position: position);
+    final RenderBox? c = child;
+    if (c == null) {
+      return false;
+    }
+    return c.hitTest(result, position: position);
   }
 
   Size? _lastChildSize;

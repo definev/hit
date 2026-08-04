@@ -16,8 +16,10 @@ class _HitLayerParentData extends ContainerBoxParentData<RenderBox> {}
 ///   [paintChild] via [alignment].
 ///
 /// When [hitChild] overflows the layout box, a [HitScope] ancestor is required
-/// so Flutter will still deliver those hits. Non-overflowing layers stay on
-/// the normal local hit path and do not register on a [HitLink].
+/// so Flutter will still deliver those hits. Without a scope (or explicit
+/// [link]), only positions inside the layout box are hit-tested — overflow
+/// regions are ignored in both debug and release. Non-overflowing layers stay
+/// on the normal local hit path and do not register on a [HitLink].
 ///
 /// ```dart
 /// HitScope(
@@ -302,6 +304,15 @@ class RenderHitLayer extends RenderBox
   }
 
   @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    final RenderBox? paint = paintRenderChild;
+    if (paint == null) {
+      return constraints.smallest;
+    }
+    return constraints.constrain(paint.getDryLayout(constraints));
+  }
+
+  @override
   void performLayout() {
     final RenderBox? hit = hitRenderChild;
     final RenderBox? paint = paintRenderChild;
@@ -428,11 +439,7 @@ class RenderHitLayer extends RenderBox
     switch (_behavior) {
       case HitTestBehavior.translucent:
         hitChildHit = _hitTestHitChild(result, position);
-      case HitTestBehavior.deferToChild:
-        if (!paintHit) {
-          hitChildHit = _hitTestHitChild(result, position);
-        }
-      case HitTestBehavior.opaque:
+      case HitTestBehavior.deferToChild || HitTestBehavior.opaque:
         if (!paintHit) {
           hitChildHit = _hitTestHitChild(result, position);
         }
@@ -452,10 +459,19 @@ class RenderHitLayer extends RenderBox
 
   /// Local hit test; returns `false` when overflow hits are deferred to
   /// [HitScope].
+  ///
+  /// Without a [link], positions outside the layout box are rejected so
+  /// release builds match the debug assert (overflow needs a [HitScope]).
   @override
   bool hitTest(BoxHitTestResult result, {required Offset position}) {
     // Overflow hits are delivered only via HitScope.
     if (_defersHit) {
+      return false;
+    }
+    // No scope/link: only the layout box is hittable (overflow is a no-op).
+    if (_hitOverflowsLayout &&
+        _link == null &&
+        !(Offset.zero & size).contains(position)) {
       return false;
     }
     return _hitTestInternal(result, position);

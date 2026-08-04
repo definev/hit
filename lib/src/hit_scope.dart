@@ -12,7 +12,8 @@ import 'hit_link.dart';
 /// app-wide scope.
 ///
 /// Pass an explicit [link] to share a registry or to let descendants register
-/// with this scope instead of a nearer one.
+/// with this scope instead of a nearer one. Changing [link] at runtime
+/// notifies dependents so deferred targets re-register on the new link.
 ///
 /// Intermediate parents above this widget (`ClipRect`, tight boxes that reject
 /// outside hits) can still block the hit-test walk even though
@@ -74,44 +75,54 @@ class HitScope extends StatefulWidget {
 /// Exposes [link] so descendants (and callers of [HitScope.of]) can register
 /// deferred targets on this scope's registry.
 class HitScopeState extends State<HitScope> {
-  final HitLink _internalLink = HitLink();
+  HitLink? _internalLink;
 
   /// The [HitLink] used by this scope.
   ///
   /// Returns [HitScope.link] when provided, otherwise an internal link owned
-  /// by this state.
-  HitLink get link => widget.link ?? _internalLink;
+  /// by this state (created lazily on first access).
+  HitLink get link => widget.link ?? (_internalLink ??= HitLink());
 
   @override
   void didUpdateWidget(covariant HitScope oldWidget) {
-    if (widget.link != null) {
-      _internalLink.removeAll();
-    }
     super.didUpdateWidget(oldWidget);
+    // Drop registrations left on the internal link when switching to an
+    // explicit one. Descendants re-register via inherited notify.
+    if (oldWidget.link == null && widget.link != null) {
+      _internalLink?.removeAll();
+    }
   }
 
   @override
   void dispose() {
-    _internalLink.dispose();
+    _internalLink?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final HitLink resolved = link;
     return _InheritedHitScope(
       state: this,
-      child: _HitScopeRenderObjectWidget(link: link, child: widget.child),
+      link: resolved,
+      child: _HitScopeRenderObjectWidget(link: resolved, child: widget.child),
     );
   }
 }
 
 class _InheritedHitScope extends InheritedWidget {
-  const _InheritedHitScope({required this.state, required super.child});
+  const _InheritedHitScope({
+    required this.state,
+    required this.link,
+    required super.child,
+  });
 
   final HitScopeState state;
+  final HitLink link;
 
   @override
-  bool updateShouldNotify(_InheritedHitScope oldWidget) => false;
+  bool updateShouldNotify(_InheritedHitScope oldWidget) =>
+      !identical(oldWidget.link, link);
 }
 
 class _HitScopeRenderObjectWidget extends SingleChildRenderObjectWidget {
@@ -150,22 +161,16 @@ class RenderHitScope extends RenderProxyBox {
   /// Registry of deferred targets hit-tested and painted by this scope.
   HitLink get link => _link!;
   set link(HitLink value) {
+    if (identical(_link, value)) {
+      return;
+    }
     if (_link != null) {
       _link!.removeListener(_onLinkChanged);
     }
     _link = value;
     _link!.addListener(_onLinkChanged);
-    _clearAabbCache();
     markNeedsPaint();
   }
-
-  /// Axis-aligned hit bounds in this scope's coordinates for the current
-  /// [hitTest] pass only.
-  ///
-  /// Must not outlive a pass: scrolling updates child transforms without
-  /// laying out this scope, so a cross-frame cache would reject valid hits.
-  final Map<HitDeferRegistration, Rect> _aabbCache =
-      <HitDeferRegistration, Rect>{};
 
   /// Retained follower layers for [Hit.defer] `paintOnTop` targets.
   ///
@@ -174,17 +179,8 @@ class RenderHitScope extends RenderProxyBox {
   final Map<HitDeferRegistration, LayerHandle<FollowerLayer>> _followerHandles =
       <HitDeferRegistration, LayerHandle<FollowerLayer>>{};
 
-  void _clearAabbCache() => _aabbCache.clear();
-
   void _onLinkChanged() {
-    _clearAabbCache();
     markNeedsPaint();
-  }
-
-  @override
-  void performLayout() {
-    _clearAabbCache();
-    super.performLayout();
   }
 
   void _releaseFollowerHandles() {
@@ -206,17 +202,13 @@ class RenderHitScope extends RenderProxyBox {
     Offset position,
     HitDeferRegistration target,
   ) {
-    final Rect? cached = _aabbCache[target];
-    if (cached != null && !cached.contains(position)) {
-      return false;
-    }
-
+    // Recompute each pass: scrolling updates child transforms without laying
+    // out this scope, so a cross-frame AABB cache would reject valid hits.
     final Matrix4 transform = target.hitTestBox.getTransformTo(this);
     final Rect aabb = MatrixUtils.transformRect(
       transform,
       target.deferredHitBounds,
     );
-    _aabbCache[target] = aabb;
     if (!aabb.contains(position)) {
       return false;
     }
@@ -238,9 +230,6 @@ class RenderHitScope extends RenderProxyBox {
   /// [HitTestBehavior.translucent] deferred hits still allow the subtree walk.
   @override
   bool hitTest(BoxHitTestResult result, {required Offset position}) {
-    // Scroll / transform changes skip [performLayout] on this scope.
-    _clearAabbCache();
-
     var anyDeferredHit = false;
 
     final bool opaqueHit = link.anyReversed((HitDeferRegistration target) {
