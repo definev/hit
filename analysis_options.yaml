@@ -1,6 +1,7 @@
 analyzer:
   exclude:
     - example/**
+    - hit_devtools_extension/**
     - build/**
     - android/**
     - ios/**
