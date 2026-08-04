@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:hit/hit.dart';
 
 const primaryColor = CupertinoColors.destructiveRed;
@@ -33,12 +34,27 @@ class _HitDemoPageState extends State<HitDemoPage> {
   int _paintUnderTaps = 0;
   int _chipTaps = 0;
   int _listTaps = 0;
+  int _tightWrongTaps = 0;
+  int _tightRightTaps = 0;
+  int _clipWrongTaps = 0;
+  int _clipRightTaps = 0;
+  int _missingWrongTaps = 0;
+  int _missingRightTaps = 0;
   bool _showHitArea = true;
   bool _useHit = true;
   bool _settingsOpen = false;
+  bool _scrollLocked = false;
   double _sliderValue = 0.45;
   Size _panelSize = const Size(140, 88);
   double _windowWidth = 150;
+
+  /// Orphan link — nothing walks it, so deferred hits never fire.
+  final HitLink _orphanLink = HitLink();
+
+  void _setScrollLocked(bool locked) {
+    if (_scrollLocked == locked) return;
+    setState(() => _scrollLocked = locked);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +65,13 @@ class _HitDemoPageState extends State<HitDemoPage> {
         child: Stack(
           children: [
             CustomScrollView(
+              // Scrubbers (slider / edge / handle) lock scroll so the page
+              // does not steal the gesture on small touch screens.
+              physics: _scrollLocked
+                  ? const NeverScrollableScrollPhysics()
+                  : const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
               slivers: [
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(24, 56, 72, 16),
@@ -65,7 +88,8 @@ class _HitDemoPageState extends State<HitDemoPage> {
                         const SizedBox(height: 8),
                         Text(
                           'Paint/layout size and hit size are separate. '
-                          'Open Settings for Use hit / Show hit areas.',
+                          'Open Settings for Use hit / Show hit areas. '
+                          'Scroll to Common mistakes to try the usual footguns.',
                           style: text.textStyle.copyWith(
                             color: CupertinoColors.secondaryLabel.resolveFrom(
                               context,
@@ -77,7 +101,7 @@ class _HitDemoPageState extends State<HitDemoPage> {
                   ),
                 ),
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 48),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   sliver: SliverGrid(
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -220,6 +244,7 @@ class _HitDemoPageState extends State<HitDemoPage> {
                           useHit: _useHit,
                           showHitArea: _showHitArea,
                           size: _panelSize,
+                          onDraggingChanged: _setScrollLocked,
                           onSizeChanged: (s) => setState(() => _panelSize = s),
                         ),
                       ),
@@ -233,6 +258,7 @@ class _HitDemoPageState extends State<HitDemoPage> {
                           useHit: _useHit,
                           showHitArea: _showHitArea,
                           width: _windowWidth,
+                          onDraggingChanged: _setScrollLocked,
                           onWidthChanged: (w) =>
                               setState(() => _windowWidth = w),
                         ),
@@ -259,10 +285,108 @@ class _HitDemoPageState extends State<HitDemoPage> {
                           useHit: _useHit,
                           showHitArea: _showHitArea,
                           value: _sliderValue,
+                          onDraggingChanged: _setScrollLocked,
                           onChanged: (v) => setState(() => _sliderValue = v),
                         ),
                       ),
                     ]),
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Common mistakes',
+                          style: text.navTitleTextStyle.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Flutter only hit-tests inside a child’s layout box. '
+                          'HitScope can deliver overflow taps — but only if '
+                          'events reach a scope that covers them. Try the '
+                          'corners on Wrong vs Right.',
+                          style: text.textStyle.copyWith(
+                            color: CupertinoColors.secondaryLabel.resolveFrom(
+                              context,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 48),
+                  sliver: SliverList.list(
+                    children: [
+                      _MistakeCompare(
+                        title: 'Scope too small',
+                        body:
+                            'Wrapping HitScope only around the 24×24 paint '
+                            'leaves the 48×48 hit outside the scope. Parents '
+                            'never walk there — pad under the scope (or lift '
+                            'it) so the overflow stays inside.',
+                        wrongFooter: '$_tightWrongTaps taps',
+                        rightFooter: '$_tightRightTaps taps',
+                        wrong: _TightScopeDemo(
+                          padded: false,
+                          showHitArea: _showHitArea,
+                          onTap: () => setState(() => _tightWrongTaps++),
+                        ),
+                        right: _TightScopeDemo(
+                          padded: true,
+                          showHitArea: _showHitArea,
+                          onTap: () => setState(() => _tightRightTaps++),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _MistakeCompare(
+                        title: 'Clip above HitScope',
+                        body:
+                            'ClipRect / a tight box above HitScope blocks the '
+                            'walk before deferred hits run. Put HitScope '
+                            'above the clip, or drop the clip and pad so the '
+                            'hanging control stays inside the scope.',
+                        wrongFooter: '$_clipWrongTaps taps',
+                        rightFooter: '$_clipRightTaps taps',
+                        wrong: _ClipScopeDemo(
+                          clipped: true,
+                          showHitArea: _showHitArea,
+                          onTap: () => setState(() => _clipWrongTaps++),
+                        ),
+                        right: _ClipScopeDemo(
+                          clipped: false,
+                          showHitArea: _showHitArea,
+                          onTap: () => setState(() => _clipRightTaps++),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _MistakeCompare(
+                        title: 'Missing HitScope',
+                        body:
+                            'Overflowing HitLayer needs a HitScope (or a link '
+                            'owned by one). Wrong uses an orphan HitLink — '
+                            'nothing delivers deferred hits. Right wraps a '
+                            'covering HitScope.',
+                        wrongFooter: '$_missingWrongTaps taps',
+                        rightFooter: '$_missingRightTaps taps',
+                        wrong: _MissingScopeDemo(
+                          link: _orphanLink,
+                          showHitArea: _showHitArea,
+                          onTap: () => setState(() => _missingWrongTaps++),
+                        ),
+                        right: _MissingScopeDemo(
+                          link: null,
+                          showHitArea: _showHitArea,
+                          onTap: () => setState(() => _missingRightTaps++),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -664,14 +788,22 @@ class _ExpandHit extends StatelessWidget {
     this.onTap,
     this.hitSize = const Size(44, 44),
     this.alignment = Alignment.center,
-    this.onPanUpdate,
+    this.drag = _ExpandDrag.none,
+    this.onDragStart,
+    this.onDragUpdate,
+    this.onDragEnd,
+    this.onDragCancel,
     this.cursor,
   });
 
   final bool useHit;
   final bool showHitArea;
   final VoidCallback? onTap;
-  final GestureDragUpdateCallback? onPanUpdate;
+  final _ExpandDrag drag;
+  final GestureDragStartCallback? onDragStart;
+  final GestureDragUpdateCallback? onDragUpdate;
+  final GestureDragEndCallback? onDragEnd;
+  final VoidCallback? onDragCancel;
   final Widget paintChild;
   final Size hitSize;
   final Alignment alignment;
@@ -680,12 +812,54 @@ class _ExpandHit extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget interact({required Widget child}) {
-      final detector = GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        onPanUpdate: onPanUpdate,
-        child: child,
-      );
+      Widget detector = child;
+      if (drag != _ExpandDrag.none) {
+        // Accept immediately so the page scroll view cannot steal the scrub.
+        detector = RawGestureDetector(
+          behavior: HitTestBehavior.opaque,
+          gestures: <Type, GestureRecognizerFactory>{
+            if (drag == _ExpandDrag.horizontal)
+              _EagerHorizontalDragGestureRecognizer:
+                  GestureRecognizerFactoryWithHandlers<
+                    _EagerHorizontalDragGestureRecognizer
+                  >(() => _EagerHorizontalDragGestureRecognizer(), (
+                    _EagerHorizontalDragGestureRecognizer instance,
+                  ) {
+                    instance
+                      ..onStart = onDragStart
+                      ..onUpdate = onDragUpdate
+                      ..onEnd = onDragEnd
+                      ..onCancel = onDragCancel;
+                  }),
+            if (drag == _ExpandDrag.pan)
+              _EagerPanGestureRecognizer:
+                  GestureRecognizerFactoryWithHandlers<
+                    _EagerPanGestureRecognizer
+                  >(() => _EagerPanGestureRecognizer(), (
+                    _EagerPanGestureRecognizer instance,
+                  ) {
+                    instance
+                      ..onStart = onDragStart
+                      ..onUpdate = onDragUpdate
+                      ..onEnd = onDragEnd
+                      ..onCancel = onDragCancel;
+                  }),
+          },
+          child: child,
+        );
+      }
+      if (onTap != null) {
+        detector = GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: detector,
+        );
+      } else if (drag == _ExpandDrag.none) {
+        detector = GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          child: detector,
+        );
+      }
       if (cursor == null) return detector;
       return MouseRegion(cursor: cursor!, child: detector);
     }
@@ -715,6 +889,26 @@ class _ExpandHit extends StatelessWidget {
       ),
       paintChild: IgnorePointer(child: paintChild),
     );
+  }
+}
+
+enum _ExpandDrag { none, pan, horizontal }
+
+/// Wins the arena on pointer down so nested scrollables cannot steal scrubs.
+class _EagerPanGestureRecognizer extends PanGestureRecognizer {
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
+  }
+}
+
+class _EagerHorizontalDragGestureRecognizer
+    extends HorizontalDragGestureRecognizer {
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
   }
 }
 
@@ -776,12 +970,14 @@ class _ResizeHandle extends StatelessWidget {
     required this.showHitArea,
     required this.size,
     required this.onSizeChanged,
+    required this.onDraggingChanged,
   });
 
   final bool useHit;
   final bool showHitArea;
   final Size size;
   final ValueChanged<Size> onSizeChanged;
+  final ValueChanged<bool> onDraggingChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -823,11 +1019,14 @@ class _ResizeHandle extends StatelessWidget {
                   child: _ExpandHit(
                     useHit: useHit,
                     showHitArea: showHitArea,
-                    hitSize: const Size(30, 30),
-                    // Paint at top-left of hit box → hit expands outside the panel.
+                    hitSize: const Size(44, 44),
                     alignment: Alignment.center,
                     cursor: SystemMouseCursors.resizeUpLeftDownRight,
-                    onPanUpdate: (details) {
+                    drag: _ExpandDrag.pan,
+                    onDragStart: (_) => onDraggingChanged(true),
+                    onDragEnd: (_) => onDraggingChanged(false),
+                    onDragCancel: () => onDraggingChanged(false),
+                    onDragUpdate: (details) {
                       onSizeChanged(
                         Size(
                           (w + details.delta.dx).clamp(72.0, maxW),
@@ -863,12 +1062,14 @@ class _WindowEdge extends StatelessWidget {
     required this.showHitArea,
     required this.width,
     required this.onWidthChanged,
+    required this.onDraggingChanged,
   });
 
   final bool useHit;
   final bool showHitArea;
   final double width;
   final ValueChanged<double> onWidthChanged;
+  final ValueChanged<bool> onDraggingChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -907,11 +1108,15 @@ class _WindowEdge extends StatelessWidget {
                   child: _ExpandHit(
                     useHit: useHit,
                     showHitArea: showHitArea,
-                    hitSize: Size(16, height),
-                    // Paint on left of hit box → hit expands outside the window.
+                    // Wide enough for a thumb; expands outside the window.
+                    hitSize: const Size(28, height),
                     alignment: Alignment.center,
                     cursor: SystemMouseCursors.resizeLeftRight,
-                    onPanUpdate: (details) {
+                    drag: _ExpandDrag.horizontal,
+                    onDragStart: (_) => onDraggingChanged(true),
+                    onDragEnd: (_) => onDraggingChanged(false),
+                    onDragCancel: () => onDraggingChanged(false),
+                    onDragUpdate: (details) {
                       onWidthChanged((w + details.delta.dx).clamp(80.0, maxW));
                     },
                     paintChild: Container(
@@ -982,12 +1187,14 @@ class _SliderThumb extends StatelessWidget {
     required this.showHitArea,
     required this.value,
     required this.onChanged,
+    required this.onDraggingChanged,
   });
 
   final bool useHit;
   final bool showHitArea;
   final double value;
   final ValueChanged<double> onChanged;
+  final ValueChanged<bool> onDraggingChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1027,11 +1234,17 @@ class _SliderThumb extends StatelessWidget {
                   useHit: useHit,
                   showHitArea: showHitArea,
                   hitSize: const Size(44, 44),
-                  onTap: null,
-                  onPanUpdate: (details) {
-                    final next = ((thumbX + details.delta.dx) / trackWidth)
-                        .clamp(0.0, 1.0);
-                    onChanged(next);
+                  drag: _ExpandDrag.horizontal,
+                  onDragStart: (_) => onDraggingChanged(true),
+                  onDragEnd: (_) => onDraggingChanged(false),
+                  onDragCancel: () => onDraggingChanged(false),
+                  onDragUpdate: (details) {
+                    final box = context.findRenderObject() as RenderBox?;
+                    if (box == null || !box.hasSize || trackWidth <= 0) {
+                      return;
+                    }
+                    final local = box.globalToLocal(details.globalPosition);
+                    onChanged((local.dx / trackWidth).clamp(0.0, 1.0));
                   },
                   paintChild: Container(
                     width: 12,
@@ -1058,6 +1271,314 @@ class _SliderThumb extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _MistakeCompare extends StatelessWidget {
+  const _MistakeCompare({
+    required this.title,
+    required this.body,
+    required this.wrong,
+    required this.right,
+    required this.wrongFooter,
+    required this.rightFooter,
+  });
+
+  final String title;
+  final String body;
+  final Widget wrong;
+  final Widget right;
+  final String wrongFooter;
+  final String rightFooter;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = CupertinoTheme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemBackground.resolveFrom(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: CupertinoColors.separator.resolveFrom(context),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: text.textStyle.copyWith(
+              fontWeight: FontWeight.w600,
+              fontSize: 17,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            body,
+            style: text.tabLabelTextStyle.copyWith(
+              color: CupertinoColors.secondaryLabel.resolveFrom(context),
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _MistakeSide(
+                  label: 'Wrong',
+                  ok: false,
+                  footer: wrongFooter,
+                  child: wrong,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _MistakeSide(
+                  label: 'Right',
+                  ok: true,
+                  footer: rightFooter,
+                  child: right,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MistakeSide extends StatelessWidget {
+  const _MistakeSide({
+    required this.label,
+    required this.ok,
+    required this.footer,
+    required this.child,
+  });
+
+  final String label;
+  final bool ok;
+  final String footer;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = CupertinoTheme.of(context).textTheme;
+    final accent = ok
+        ? CupertinoColors.activeGreen.resolveFrom(context)
+        : CupertinoColors.destructiveRed.resolveFrom(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: text.tabLabelTextStyle.copyWith(
+            color: accent,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          height: 120,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: CupertinoColors.secondarySystemBackground.resolveFrom(
+              context,
+            ),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: accent.withValues(alpha: 0.35)),
+          ),
+          child: child,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          footer,
+          style: text.textStyle.copyWith(fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
+}
+
+/// Shared 24 paint / 48 hit icon used by mistake demos.
+class _MistakeIconLayer extends StatelessWidget {
+  const _MistakeIconLayer({
+    required this.showHitArea,
+    required this.onTap,
+    this.link,
+  });
+
+  final bool showHitArea;
+  final VoidCallback onTap;
+  final HitLink? link;
+
+  @override
+  Widget build(BuildContext context) {
+    return HitLayer(
+      link: link,
+      alignment: Alignment.center,
+      behavior: HitTestBehavior.deferToChild,
+      hitChild: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: showHitArea ? const _HitGhost() : null,
+        ),
+      ),
+      paintChild: const IgnorePointer(
+        child: Icon(CupertinoIcons.add, size: 24),
+      ),
+    );
+  }
+}
+
+class _TightScopeDemo extends StatelessWidget {
+  const _TightScopeDemo({
+    required this.padded,
+    required this.showHitArea,
+    required this.onTap,
+  });
+
+  final bool padded;
+  final bool showHitArea;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final layer = _MistakeIconLayer(showHitArea: showHitArea, onTap: onTap);
+    // Nested HitScope so the page-level scope does not rescue the tight case.
+    return HitScope(
+      child: padded
+          ? Padding(padding: const EdgeInsets.all(12), child: layer)
+          : layer,
+    );
+  }
+}
+
+class _ClipScopeDemo extends StatelessWidget {
+  const _ClipScopeDemo({
+    required this.clipped,
+    required this.showHitArea,
+    required this.onTap,
+  });
+
+  final bool clipped;
+  final bool showHitArea;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final card = SizedBox(
+      width: 72,
+      height: 72,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemGrey6.resolveFrom(context),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: CupertinoColors.separator.resolveFrom(context),
+                ),
+              ),
+              child: const Padding(
+                padding: EdgeInsets.all(8),
+                child: Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Text('Card', style: TextStyle(fontSize: 12)),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: -14,
+            top: -14,
+            child: Hit.defer(
+              behavior: HitTestBehavior.opaque,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onTap,
+                child: SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: CupertinoTheme.of(context).primaryColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: CupertinoColors.white,
+                            width: 2,
+                          ),
+                        ),
+                        child: const Icon(
+                          CupertinoIcons.add,
+                          size: 14,
+                          color: CupertinoColors.white,
+                        ),
+                      ),
+                      if (showHitArea)
+                        const IgnorePointer(child: _HitGhost(circular: true)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (clipped) {
+      // Clip above HitScope — overflow never receives events.
+      return ClipRect(
+        child: SizedBox(width: 72, height: 72, child: HitScope(child: card)),
+      );
+    }
+
+    // HitScope covers the hanging badge via padding; no clip above.
+    return HitScope(
+      child: Padding(padding: const EdgeInsets.all(16), child: card),
+    );
+  }
+}
+
+class _MissingScopeDemo extends StatelessWidget {
+  const _MissingScopeDemo({
+    required this.link,
+    required this.showHitArea,
+    required this.onTap,
+  });
+
+  /// Non-null orphan link = Wrong (nothing walks it). Null = use HitScope.
+  final HitLink? link;
+  final bool showHitArea;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final layer = _MistakeIconLayer(
+      link: link,
+      showHitArea: showHitArea,
+      onTap: onTap,
+    );
+    if (link != null) {
+      // Deliberately no HitScope on this link — deferred hits never fire.
+      return Padding(padding: const EdgeInsets.all(12), child: layer);
+    }
+    return HitScope(
+      child: Padding(padding: const EdgeInsets.all(12), child: layer),
     );
   }
 }
