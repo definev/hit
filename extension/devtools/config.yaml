@@ -1,0 +1,5 @@
+name: hit
+issueTracker: https://github.com/definev/hit/issues
+version: 0.1.0
+materialIconCodePoint: '0xe0d9'
+requiresConnection: true

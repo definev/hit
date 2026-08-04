@@ -1,6 +1,8 @@
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
+import 'hit_debug.dart';
+import 'hit_devtools.dart';
 import 'hit_link.dart';
 import 'hit_scope.dart';
 
@@ -37,6 +39,7 @@ class HitDefer extends StatelessWidget {
     this.paint = HitDeferPaint.none,
     this.link,
     this.behavior = HitTestBehavior.translucent,
+    this.debugLabel,
   });
 
   /// The widget whose hit testing (and optionally paint) is deferred.
@@ -51,13 +54,18 @@ class HitDefer extends StatelessWidget {
   /// How this target participates in the [HitScope] deferred hit walk.
   final HitTestBehavior behavior;
 
+  /// Optional name for DevTools / Flutter Inspector (debug builds).
+  final String? debugLabel;
+
   @override
   Widget build(BuildContext context) {
+    ensureHitDevToolsInitialized();
     final HitLink resolvedLink = link ?? HitScope.of(context).link;
     return _HitDeferRenderObjectWidget(
       link: resolvedLink,
       paint: paint,
       behavior: behavior,
+      debugLabel: debugLabel,
       child: child,
     );
   }
@@ -68,12 +76,14 @@ class _HitDeferRenderObjectWidget extends SingleChildRenderObjectWidget {
     required this.link,
     required this.paint,
     required this.behavior,
+    required this.debugLabel,
     required super.child,
   });
 
   final HitLink link;
   final HitDeferPaint paint;
   final HitTestBehavior behavior;
+  final String? debugLabel;
 
   @override
   RenderObject createRenderObject(BuildContext context) {
@@ -81,6 +91,7 @@ class _HitDeferRenderObjectWidget extends SingleChildRenderObjectWidget {
       link: link,
       paint: paint,
       behavior: behavior,
+      debugLabel: debugLabel,
     );
   }
 
@@ -89,7 +100,8 @@ class _HitDeferRenderObjectWidget extends SingleChildRenderObjectWidget {
     renderObject
       ..link = link
       ..deferPaint = paint
-      ..hitBehavior = behavior;
+      ..hitBehavior = behavior
+      ..debugLabel = debugLabel;
   }
 }
 
@@ -98,16 +110,20 @@ class _HitDeferRenderObjectWidget extends SingleChildRenderObjectWidget {
 /// Registers on [link] while attached, skips local hit testing, and optionally
 /// defers paint to the enclosing [HitScope] when [deferPaint] is not
 /// [HitDeferPaint.none].
-class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
+class RenderHitDefer extends RenderProxyBox
+    with HitDebugPaintMixin
+    implements HitDeferRegistration {
   /// Creates a deferred hit target bound to [link].
   RenderHitDefer({
     required HitLink link,
     required HitDeferPaint paint,
     required HitTestBehavior behavior,
+    String? debugLabel,
     RenderBox? child,
   })  : _link = link,
         _paint = paint,
         _behavior = behavior,
+        _debugLabel = debugLabel,
         super(child);
 
   HitLink _link;
@@ -126,6 +142,18 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
     if (attached) {
       _link.add(this);
     }
+  }
+
+  String? _debugLabel;
+
+  /// Optional name for DevTools / Flutter Inspector.
+  @override
+  String? get debugLabel => _debugLabel;
+  set debugLabel(String? value) {
+    if (_debugLabel == value) {
+      return;
+    }
+    _debugLabel = value;
   }
 
   /// Tracks this target for [HitScope]'s composited [HitDeferPaint.onTop]
@@ -168,6 +196,14 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
       _paint == HitDeferPaint.onTop ? _paintLink : null;
 
   @override
+  LayerLink? get hitDebugLeaderLink =>
+      // Always null when asserts are disabled (release / profile).
+      hitDebugPaintingEnabled ? _paintLink : null;
+
+  bool get _needsDebugLeader =>
+      hitDebugPaintingEnabled && _paint == HitDeferPaint.none;
+
+  @override
   bool hitTestDeferred(BoxHitTestResult result, Offset position) {
     final RenderBox? c = child;
     if (c == null) {
@@ -208,11 +244,13 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
   @override
   void attach(covariant PipelineOwner owner) {
     super.attach(owner);
+    attachHitDebugPaintListener();
     _link.add(this);
   }
 
   @override
   void detach() {
+    detachHitDebugPaintListener();
     _link.remove(this);
     layer = null;
     super.detach();
@@ -220,7 +258,9 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
 
   @override
   bool get alwaysNeedsCompositing =>
-      _paint == HitDeferPaint.onTop || super.alwaysNeedsCompositing;
+      _paint == HitDeferPaint.onTop ||
+      _needsDebugLeader ||
+      super.alwaysNeedsCompositing;
 
   /// Always returns `false`; hits are delivered only via [HitScope].
   @override
@@ -231,7 +271,7 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
     switch (_paint) {
       case HitDeferPaint.onTop:
         // Leader updates with scroll / transforms; HitScope paints via
-        // FollowerLayer.
+        // FollowerLayer. The same leader anchors the debug overlay follower.
         if (child != null) {
           final LeaderLayer leaderLayer = layer is LeaderLayer
               ? layer! as LeaderLayer
@@ -243,7 +283,28 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
               (PaintingContext context, Offset offset) {}, Offset.zero);
         }
       case HitDeferPaint.none:
-        if (child != null) {
+        if (child == null) {
+          layer = null;
+          return;
+        }
+        if (_needsDebugLeader) {
+          // Establish a leader so HitScope's debug follower tracks this child
+          // through scroll / transforms.
+          final LeaderLayer leaderLayer = layer is LeaderLayer
+              ? layer! as LeaderLayer
+              : LeaderLayer(link: _paintLink);
+          layer = leaderLayer
+            ..link = _paintLink
+            ..offset = offset;
+          context.pushLayer(
+            leaderLayer,
+            (PaintingContext context, Offset offset) {
+              context.paintChild(child!, offset);
+            },
+            Offset.zero,
+          );
+        } else {
+          layer = null;
           context.paintChild(child!, offset);
         }
     }
@@ -260,5 +321,13 @@ class RenderHitDefer extends RenderProxyBox implements HitDeferRegistration {
       case HitDeferPaint.none:
         super.markNeedsPaint();
     }
+  }
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(
+      StringProperty('debugLabel', debugLabel, defaultValue: null),
+    );
   }
 }

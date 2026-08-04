@@ -26,7 +26,7 @@ Flutter layout and hit-testing share the same box. Growing padding to enlarge a 
 
 ```yaml
 dependencies:
-  hit: ^1.2.0
+  hit: ^1.2.1
 ```
 
 ```dart
@@ -41,6 +41,56 @@ Stable surface from `package:hit/hit.dart`:
 - `HitLayer`, `HitScope` / `HitScopeState`, `SliverHitScope` / `SliverHitScopeState`, `HitScopeHandle`
 - `HitDefer`, `HitDeferPaint`
 - `HitLink`, `HitDeferRegistration`
+- `debugPaintHitAreas`, `paintHitAreaDebugOverlay`, `ensureHitDevToolsInitialized`
+- Optional `debugLabel` on `HitLayer` / `HitDefer` / `HitScope` / `SliverHitScope`
+
+## Debugging
+
+### Hit-area overlays
+
+```dart
+import 'package:hit/hit.dart';
+
+debugPaintHitAreas = true; // or enable Flutter DevTools → Debug Paint
+```
+
+Overflowing / deferred hit bounds are drawn as a dashed overlay (including
+regions outside layout size, painted from the enclosing scope so clips do not
+hide them).
+
+### DevTools extension
+
+Apps that depend on `package:hit` get a **hit** tab in Dart DevTools (enable
+it from the Extensions menu the first time). The tab can:
+
+- toggle hit-area overlays and **Select** mode remotely
+- browse a hierarchical **Hit Scope Tree** (`TreeView`) of scopes and targets
+- inspect **Hit Layer Details** and **Hit Analysis** for the selection
+- tap a debug-painted hit area in the app (with Select on) to jump/highlight
+  the matching tree node and open the `HitLayer` / `HitDefer` / `HitScope`
+  call site in the IDE (via Flutter Widget Inspector navigate)
+- probe a global `(x, y)` and explain what would hit / why a tap might miss
+
+Service extensions (`ext.hit.*`) register automatically in debug/profile when
+any hit widget mounts. Prefer setting `debugLabel` on targets/scopes so the
+tree is readable:
+
+```dart
+HitLayer(
+  debugLabel: 'compose-send',
+  // ...
+)
+```
+
+Rebuild the embedded web assets after changing the
+extension UI:
+
+```bash
+./tool/build_devtools.sh
+```
+
+See [DevTools extensions](https://docs.flutter.dev/tools/devtools/extensions)
+and [`devtools_extensions`](https://pub.dev/packages/devtools_extensions).
 
 ### Migrating from 1.1.x
 

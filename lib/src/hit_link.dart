@@ -144,6 +144,12 @@ class _HitLinkSignal extends ChangeNotifier {
 /// Implemented by deferred hit targets ([HitDefer]) and by
 /// [HitLayer] when its hit child overflows layout size.
 abstract class HitDeferRegistration {
+  /// Optional name shown in DevTools / debug dumps.
+  ///
+  /// Null when unset. Prefer short, stable labels (e.g. `'trash'`,
+  /// `'chip-dismiss'`).
+  String? get debugLabel;
+
   /// Box used for deferred paint positioning; null if this target does not
   /// paint through the scope.
   RenderBox? get registeredChild;
@@ -177,6 +183,13 @@ abstract class HitDeferRegistration {
   /// [HitScope] paints a [FollowerLayer] so deferred paint tracks scroll /
   /// transforms without requiring the scope to repaint every frame.
   LayerLink? get deferredPaintLink;
+
+  /// Leader link for composited hit-area debug overlays. Null when unused.
+  ///
+  /// When non-null, [HitScope] paints the debug overlay via a [FollowerLayer]
+  /// so it tracks the target (and its [paintChild] / child) through scroll and
+  /// transforms without requiring the scope to repaint every frame.
+  LayerLink? get hitDebugLeaderLink;
 }
 
 /// How a deferred target is painted by its enclosing [HitScope].

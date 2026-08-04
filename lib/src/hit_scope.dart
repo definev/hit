@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
+import 'hit_debug.dart';
+import 'hit_devtools.dart';
 import 'hit_link.dart';
 
 /// Registry handle exposed by [HitScope] and [SliverHitScope].
@@ -31,13 +34,21 @@ abstract interface class HitScopeHandle {
 /// For [CustomScrollView] / sliver trees, use [SliverHitScope] instead.
 class HitScope extends StatefulWidget {
   /// Creates a scope that delivers deferred hits for [child]'s subtree.
-  const HitScope({super.key, required this.child, this.link});
+  const HitScope({
+    super.key,
+    required this.child,
+    this.link,
+    this.debugLabel,
+  });
 
   /// The subtree that may contain deferred hit targets.
   final Widget child;
 
   /// Optional shared registry. When null, an internal [HitLink] is used.
   final HitLink? link;
+
+  /// Optional name for DevTools / Flutter Inspector (debug builds).
+  final String? debugLabel;
 
   /// The nearest enclosing [HitScopeHandle] ([HitScope] or [SliverHitScope]).
   ///
@@ -86,7 +97,9 @@ class HitScope extends StatefulWidget {
 ///
 /// Exposes [link] so descendants (and callers of [HitScope.of]) can register
 /// deferred targets on this scope's registry.
-class HitScopeState extends State<HitScope> implements HitScopeHandle {
+class HitScopeState extends State<HitScope>
+    with _HitScopeDebugScrollMixin
+    implements HitScopeHandle {
   HitLink? _internalLink;
 
   /// The [HitLink] used by this scope.
@@ -95,6 +108,12 @@ class HitScopeState extends State<HitScope> implements HitScopeHandle {
   /// by this state (created lazily on first access).
   @override
   HitLink get link => widget.link ?? (_internalLink ??= HitLink());
+
+  @override
+  void initState() {
+    super.initState();
+    ensureHitDevToolsInitialized();
+  }
 
   @override
   void didUpdateWidget(covariant HitScope oldWidget) {
@@ -108,6 +127,7 @@ class HitScopeState extends State<HitScope> implements HitScopeHandle {
 
   @override
   void dispose() {
+    detachHitDebugScrollListener();
     _internalLink?.dispose();
     super.dispose();
   }
@@ -118,7 +138,14 @@ class HitScopeState extends State<HitScope> implements HitScopeHandle {
     return _InheritedHitScope(
       handle: this,
       link: resolved,
-      child: _HitScopeRenderObjectWidget(link: resolved, child: widget.child),
+      child: wrapForDebugScrollPaint(
+        _HitScopeRenderObjectWidget(
+          key: debugPaintScopeKey,
+          link: resolved,
+          debugLabel: widget.debugLabel,
+          child: widget.child,
+        ),
+      ),
     );
   }
 }
@@ -148,13 +175,21 @@ class HitScopeState extends State<HitScope> implements HitScopeHandle {
 /// ```
 class SliverHitScope extends StatefulWidget {
   /// Creates a sliver scope that delivers deferred hits for [sliver]'s subtree.
-  const SliverHitScope({super.key, required this.sliver, this.link});
+  const SliverHitScope({
+    super.key,
+    required this.sliver,
+    this.link,
+    this.debugLabel,
+  });
 
   /// The sliver subtree that may contain deferred hit targets.
   final Widget sliver;
 
   /// Optional shared registry. When null, an internal [HitLink] is used.
   final HitLink? link;
+
+  /// Optional name for DevTools / Flutter Inspector (debug builds).
+  final String? debugLabel;
 
   @override
   State<SliverHitScope> createState() => SliverHitScopeState();
@@ -165,6 +200,7 @@ class SliverHitScope extends StatefulWidget {
 /// Exposes [link] so descendants (and callers of [HitScope.of]) can register
 /// deferred targets on this scope's registry.
 class SliverHitScopeState extends State<SliverHitScope>
+    with _HitScopeDebugScrollMixin
     implements HitScopeHandle {
   HitLink? _internalLink;
 
@@ -176,6 +212,12 @@ class SliverHitScopeState extends State<SliverHitScope>
   HitLink get link => widget.link ?? (_internalLink ??= HitLink());
 
   @override
+  void initState() {
+    super.initState();
+    ensureHitDevToolsInitialized();
+  }
+
+  @override
   void didUpdateWidget(covariant SliverHitScope oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.link == null && widget.link != null) {
@@ -185,6 +227,7 @@ class SliverHitScopeState extends State<SliverHitScope>
 
   @override
   void dispose() {
+    detachHitDebugScrollListener();
     _internalLink?.dispose();
     super.dispose();
   }
@@ -195,10 +238,91 @@ class SliverHitScopeState extends State<SliverHitScope>
     return _InheritedHitScope(
       handle: this,
       link: resolved,
-      child: _SliverHitScopeRenderObjectWidget(
-        link: resolved,
-        child: widget.sliver,
+      child: wrapForDebugScrollPaint(
+        _SliverHitScopeRenderObjectWidget(
+          key: debugPaintScopeKey,
+          link: resolved,
+          debugLabel: widget.debugLabel,
+          child: widget.sliver,
+        ),
       ),
+    );
+  }
+}
+
+/// Keeps deferred hit-area debug overlays subscribed while scrolling.
+///
+/// Primary tracking uses composited [LeaderLayer] / [FollowerLayer] pairs
+/// ([HitDeferRegistration.hitDebugLeaderLink]). This mixin still forces a
+/// scope repaint on scroll so newly-registered leaders are re-linked promptly
+/// when a [RepaintBoundary] would otherwise skip the scope paint path.
+mixin _HitScopeDebugScrollMixin<T extends StatefulWidget> on State<T> {
+  final GlobalKey _debugPaintScopeKey = GlobalKey();
+  ScrollPosition? _scrollPosition;
+
+  /// Key applied to the scope render-object widget.
+  GlobalKey get debugPaintScopeKey => _debugPaintScopeKey;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncScrollPositionListener();
+  }
+
+  /// Removes the [ScrollPosition] listener. Call from [State.dispose].
+  void detachHitDebugScrollListener() {
+    _scrollPosition?.removeListener(_onScrollForDebugPaint);
+    _scrollPosition = null;
+  }
+
+  void _syncScrollPositionListener() {
+    assert(() {
+      final ScrollPosition? next = Scrollable.maybeOf(context)?.position;
+      if (identical(next, _scrollPosition)) {
+        return true;
+      }
+      _scrollPosition?.removeListener(_onScrollForDebugPaint);
+      _scrollPosition = next;
+      _scrollPosition?.addListener(_onScrollForDebugPaint);
+      return true;
+    }());
+  }
+
+  void _onScrollForDebugPaint() => _markScopeNeedsDebugPaint();
+
+  bool _onScrollNotification(ScrollNotification notification) {
+    // Scope is often an *ancestor* of the [Scrollable] (e.g. HitScope wrapping
+    // a CustomScrollView). Scroll notifications bubble; [ScrollPosition]
+    // listeners only work when this scope is a *descendant*.
+    _markScopeNeedsDebugPaint();
+    return false;
+  }
+
+  void _markScopeNeedsDebugPaint() {
+    assert(() {
+      if (!hitDebugPaintingEnabled) {
+        return true;
+      }
+      final RenderObject? ro =
+          _debugPaintScopeKey.currentContext?.findRenderObject();
+      if (ro != null && ro.attached) {
+        ro.markNeedsPaint();
+      }
+      return true;
+    }());
+  }
+
+  /// Wraps [child] so descendant scrollables trigger debug overlay repaints.
+  ///
+  /// Returns [child] unchanged outside [kDebugMode] so release builds do not
+  /// pay for the notification listener.
+  Widget wrapForDebugScrollPaint(Widget child) {
+    if (!kDebugMode) {
+      return child;
+    }
+    return NotificationListener<ScrollNotification>(
+      onNotification: _onScrollNotification,
+      child: child,
     );
   }
 }
@@ -219,32 +343,43 @@ class _InheritedHitScope extends InheritedWidget {
 }
 
 class _HitScopeRenderObjectWidget extends SingleChildRenderObjectWidget {
-  const _HitScopeRenderObjectWidget({required this.link, required super.child});
+  const _HitScopeRenderObjectWidget({
+    super.key,
+    required this.link,
+    required this.debugLabel,
+    required super.child,
+  });
 
   final HitLink link;
+  final String? debugLabel;
 
   @override
   RenderObject createRenderObject(BuildContext context) {
-    return RenderHitScope(link);
+    return RenderHitScope(link, debugLabel: debugLabel);
   }
 
   @override
   void updateRenderObject(BuildContext context, RenderHitScope renderObject) {
-    renderObject.link = link;
+    renderObject
+      ..link = link
+      ..debugLabel = debugLabel;
   }
 }
 
 class _SliverHitScopeRenderObjectWidget extends SingleChildRenderObjectWidget {
   const _SliverHitScopeRenderObjectWidget({
+    super.key,
     required this.link,
+    required this.debugLabel,
     required Widget child,
   }) : super(child: child);
 
   final HitLink link;
+  final String? debugLabel;
 
   @override
   RenderObject createRenderObject(BuildContext context) {
-    return RenderSliverHitScope(link);
+    return RenderSliverHitScope(link, debugLabel: debugLabel);
   }
 
   @override
@@ -252,7 +387,9 @@ class _SliverHitScopeRenderObjectWidget extends SingleChildRenderObjectWidget {
     BuildContext context,
     RenderSliverHitScope renderObject,
   ) {
-    renderObject.link = link;
+    renderObject
+      ..link = link
+      ..debugLabel = debugLabel;
   }
 }
 
@@ -262,22 +399,88 @@ mixin _HitScopeDeferredMixin on RenderObject {
 
   final Map<HitDeferRegistration, LayerHandle<FollowerLayer>> _followerHandles =
       <HitDeferRegistration, LayerHandle<FollowerLayer>>{};
+  final Map<HitDeferRegistration, LayerHandle<FollowerLayer>>
+      _debugFollowerHandles =
+      <HitDeferRegistration, LayerHandle<FollowerLayer>>{};
+
+  bool _listeningHitDebug = false;
+  bool _listeningGeometryForDebug = false;
 
   void _attachLink(HitLink? oldLink, HitLink newLink) {
     if (identical(oldLink, newLink)) {
       return;
     }
     oldLink?.removePaintListener(_onLinkPaint);
+    if (_listeningGeometryForDebug) {
+      oldLink?.removeGeometryListener(_onLinkGeometryForDebug);
+    }
     newLink.addPaintListener(_onLinkPaint);
+    if (_listeningGeometryForDebug) {
+      newLink.addGeometryListener(_onLinkGeometryForDebug);
+    }
     markNeedsPaint();
   }
 
   void _detachLink(HitLink? link) {
     link?.removePaintListener(_onLinkPaint);
+    if (_listeningGeometryForDebug) {
+      link?.removeGeometryListener(_onLinkGeometryForDebug);
+      _listeningGeometryForDebug = false;
+    }
   }
 
   void _onLinkPaint() {
     markNeedsPaint();
+  }
+
+  void _onLinkGeometryForDebug() {
+    markNeedsPaint();
+  }
+
+  void _attachHitDebugListeners() {
+    assert(() {
+      if (!_listeningHitDebug) {
+        addHitDebugPaintListener(_onHitDebugPaintFlagChanged);
+        _listeningHitDebug = true;
+      }
+      _syncGeometryDebugListener();
+      return true;
+    }());
+  }
+
+  void _detachHitDebugListeners() {
+    assert(() {
+      if (_listeningHitDebug) {
+        removeHitDebugPaintListener(_onHitDebugPaintFlagChanged);
+        _listeningHitDebug = false;
+      }
+      if (_listeningGeometryForDebug) {
+        link.removeGeometryListener(_onLinkGeometryForDebug);
+        _listeningGeometryForDebug = false;
+      }
+      return true;
+    }());
+  }
+
+  void _onHitDebugPaintFlagChanged() {
+    _syncGeometryDebugListener();
+    markNeedsPaint();
+  }
+
+  /// When hit-area debug is on, geometry dirty must repaint so deferred
+  /// overlays track scroll / bounds without waiting for a paint signal.
+  void _syncGeometryDebugListener() {
+    assert(() {
+      final bool need = hitDebugPaintingEnabled;
+      if (need && !_listeningGeometryForDebug) {
+        link.addGeometryListener(_onLinkGeometryForDebug);
+        _listeningGeometryForDebug = true;
+      } else if (!need && _listeningGeometryForDebug) {
+        link.removeGeometryListener(_onLinkGeometryForDebug);
+        _listeningGeometryForDebug = false;
+      }
+      return true;
+    }());
   }
 
   void _releaseFollowerHandles() {
@@ -285,6 +488,11 @@ mixin _HitScopeDeferredMixin on RenderObject {
       handle.layer = null;
     }
     _followerHandles.clear();
+    for (final LayerHandle<FollowerLayer> handle
+        in _debugFollowerHandles.values) {
+      handle.layer = null;
+    }
+    _debugFollowerHandles.clear();
   }
 
   bool hitTestDeferredTarget(
@@ -392,6 +600,92 @@ mixin _HitScopeDeferredMixin on RenderObject {
       return true;
     });
   }
+
+  /// Draws hit-testable bounds for every registered deferred target.
+  ///
+  /// Painted after the clipped subtree via composited [FollowerLayer]s linked
+  /// to each target's [HitDeferRegistration.hitDebugLeaderLink], so overlays
+  /// track scroll / transforms with the target (including [HitLayer.paintChild])
+  /// without requiring this scope to repaint every frame.
+  void paintDeferredHitDebug(PaintingContext context, Offset offset) {
+    assert(() {
+      _syncGeometryDebugListener();
+      if (!hitDebugPaintingEnabled) {
+        _releaseDebugFollowerHandles();
+        return true;
+      }
+
+      final Set<HitDeferRegistration> painted = <HitDeferRegistration>{};
+
+      link.forEach((HitDeferRegistration target) {
+        final LayerLink? leaderLink = target.hitDebugLeaderLink;
+        if (leaderLink == null) {
+          return;
+        }
+        painted.add(target);
+
+        final LayerHandle<FollowerLayer> handle =
+            _debugFollowerHandles.putIfAbsent(
+          target,
+          () => LayerHandle<FollowerLayer>(),
+        );
+        FollowerLayer? follower = handle.layer;
+        if (follower == null) {
+          follower = FollowerLayer(
+            link: leaderLink,
+            showWhenUnlinked: false,
+            linkedOffset: Offset.zero,
+            unlinkedOffset: offset,
+          );
+          handle.layer = follower;
+        } else {
+          follower
+            ..link = leaderLink
+            ..showWhenUnlinked = false
+            ..linkedOffset = Offset.zero
+            ..unlinkedOffset = offset;
+        }
+
+        context.pushLayer(
+          follower,
+          (PaintingContext context, Offset offset) {
+            paintHitAreaDebugOverlay(
+              context.canvas,
+              target.deferredHitBounds.shift(offset),
+              highlighted: isHitDebugHighlighted(target),
+            );
+          },
+          Offset.zero,
+          childPaintBounds: const Rect.fromLTRB(
+            double.negativeInfinity,
+            double.negativeInfinity,
+            double.infinity,
+            double.infinity,
+          ),
+        );
+      });
+
+      _debugFollowerHandles.removeWhere((
+        HitDeferRegistration target,
+        LayerHandle<FollowerLayer> handle,
+      ) {
+        if (painted.contains(target)) {
+          return false;
+        }
+        handle.layer = null;
+        return true;
+      });
+      return true;
+    }());
+  }
+
+  void _releaseDebugFollowerHandles() {
+    for (final LayerHandle<FollowerLayer> handle
+        in _debugFollowerHandles.values) {
+      handle.layer = null;
+    }
+    _debugFollowerHandles.clear();
+  }
 }
 
 /// Render object that performs deferred hit testing and optional deferred
@@ -405,12 +699,28 @@ mixin _HitScopeDeferredMixin on RenderObject {
 /// [FollowerLayer]s).
 class RenderHitScope extends RenderProxyBox with _HitScopeDeferredMixin {
   /// Creates a scope render object bound to [link].
-  RenderHitScope(HitLink link, [RenderBox? child]) : super(child) {
+  RenderHitScope(
+    HitLink link, {
+    String? debugLabel,
+    RenderBox? child,
+  }) : super(child) {
     _link = link;
+    _debugLabel = debugLabel;
     link.addPaintListener(_onLinkPaint);
+    _attachHitDebugListeners();
   }
 
   HitLink? _link;
+  String? _debugLabel;
+
+  /// Optional name for DevTools / Flutter Inspector.
+  String? get debugLabel => _debugLabel;
+  set debugLabel(String? value) {
+    if (_debugLabel == value) {
+      return;
+    }
+    _debugLabel = value;
+  }
 
   /// Registry of deferred targets hit-tested and painted by this scope.
   @override
@@ -426,6 +736,7 @@ class RenderHitScope extends RenderProxyBox with _HitScopeDeferredMixin {
 
   @override
   void dispose() {
+    _detachHitDebugListeners();
     _detachLink(_link);
     _releaseFollowerHandles();
     super.dispose();
@@ -457,6 +768,15 @@ class RenderHitScope extends RenderProxyBox with _HitScopeDeferredMixin {
   void paint(PaintingContext context, Offset offset) {
     super.paint(context, offset);
     paintDeferredOnTop(context, offset);
+    paintDeferredHitDebug(context, offset);
+  }
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(
+      StringProperty('debugLabel', debugLabel, defaultValue: null),
+    );
   }
 }
 
@@ -468,12 +788,28 @@ class RenderHitScope extends RenderProxyBox with _HitScopeDeferredMixin {
 class RenderSliverHitScope extends RenderProxySliver
     with _HitScopeDeferredMixin {
   /// Creates a sliver scope render object bound to [link].
-  RenderSliverHitScope(HitLink link, [RenderSliver? child]) : super(child) {
+  RenderSliverHitScope(
+    HitLink link, {
+    String? debugLabel,
+    RenderSliver? child,
+  }) : super(child) {
     _link = link;
+    _debugLabel = debugLabel;
     link.addPaintListener(_onLinkPaint);
+    _attachHitDebugListeners();
   }
 
   HitLink? _link;
+  String? _debugLabel;
+
+  /// Optional name for DevTools / Flutter Inspector.
+  String? get debugLabel => _debugLabel;
+  set debugLabel(String? value) {
+    if (_debugLabel == value) {
+      return;
+    }
+    _debugLabel = value;
+  }
 
   /// Registry of deferred targets hit-tested and painted by this scope.
   @override
@@ -489,6 +825,7 @@ class RenderSliverHitScope extends RenderProxySliver
 
   @override
   void dispose() {
+    _detachHitDebugListeners();
     _detachLink(_link);
     _releaseFollowerHandles();
     super.dispose();
@@ -583,5 +920,14 @@ class RenderSliverHitScope extends RenderProxySliver
   void paint(PaintingContext context, Offset offset) {
     super.paint(context, offset);
     paintDeferredOnTop(context, offset);
+    paintDeferredHitDebug(context, offset);
+  }
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(
+      StringProperty('debugLabel', debugLabel, defaultValue: null),
+    );
   }
 }

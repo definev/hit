@@ -1,0 +1,3 @@
+# Built extension assets are produced by tool/build_devtools.sh and must ship
+# with the published package even if ignored by git.
+!build/

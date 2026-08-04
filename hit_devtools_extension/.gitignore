@@ -32,13 +32,6 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
-hit_devtools_extension/.dart_tool/
-hit_devtools_extension/build/
-hit_devtools_extension/.flutter-plugins-dependencies
-
-# DevTools extension build output is large; rebuild before publish via
-# tool/build_devtools.sh. Keep config.yaml tracked.
-extension/devtools/build/
 
 # Symbolication related
 app.*.symbols
@@ -53,8 +46,3 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
-
-# DevTools local enablement (per-machine / per-checkout)
-devtools_options.yaml
-**/devtools_options.yaml
-

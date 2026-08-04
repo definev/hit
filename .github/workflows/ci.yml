@@ -17,3 +17,11 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
+      - name: Analyze DevTools extension
+        run: |
+          flutter pub get --directory hit_devtools_extension
+          flutter analyze hit_devtools_extension
+      - name: Validate DevTools extension config
+        run: |
+          flutter pub get --directory hit_devtools_extension
+          (cd hit_devtools_extension && dart run devtools_extensions validate --package=..)

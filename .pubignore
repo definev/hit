@@ -9,7 +9,7 @@
 .widget_preview/
 
 # Build / generated
-build/
+/build/
 coverage/
 **/doc/api/
 *.class
@@ -19,6 +19,14 @@ coverage/
 .DS_Store
 app.*.symbols
 app.*.map.json
+
+# DevTools extension web app source lives in the repo but is not published;
+# only extension/devtools/{config.yaml,build} ships with the package.
+hit_devtools_extension/
+
+# Ensure published package includes the prebuilt DevTools extension assets
+# even when extension/devtools/build is gitignored.
+!extension/devtools/build/
 
 # Library packages should not ship lockfiles
 pubspec.lock

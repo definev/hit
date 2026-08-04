@@ -47,6 +47,9 @@ void main() {
 
 class _FakeTarget implements HitDeferRegistration {
   @override
+  String? get debugLabel => null;
+
+  @override
   RenderBox? get registeredChild => null;
 
   @override
@@ -66,4 +69,7 @@ class _FakeTarget implements HitDeferRegistration {
 
   @override
   LayerLink? get deferredPaintLink => null;
+
+  @override
+  LayerLink? get hitDebugLeaderLink => null;
 }

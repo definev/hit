@@ -1,3 +1,27 @@
+## 1.2.1
+
+- Add `debugPaintHitAreas` — when enabled (or when Flutter's
+  `debugPaintSizeEnabled` / DevTools **Debug Paint** is on), `HitLayer` and
+  deferred targets paint a dashed overlay of their real hit-test bounds,
+  including overflow regions drawn from `HitScope` / `SliverHitScope`.
+- Deferred hit-area debug overlays track `paintChild` / scroll via composited
+  `LeaderLayer` / `FollowerLayer` (`HitDeferRegistration.hitDebugLeaderLink`),
+  matching `HitDeferPaint.onTop` paint tracking.
+- Debug paint / DevTools paths are assert-gated: release and profile builds
+  never enable overlays, debug compositing, or scroll debug listeners.
+- Add a **DevTools extension** (`extension/devtools`) with:
+  - remote toggle for hit-area overlays and **Select** mode
+  - hierarchical **Hit Scope Tree** (`TreeView`) of scopes and targets
+  - **Hit Layer Details** + **Hit Analysis** panels
+  - tap a debug-painted hit area in the app (Select mode) to jump/highlight
+    the matching tree node (`Hit.selected` extension event) and open the
+    widget call site in the IDE (Widget Inspector `navigate` ToolEvent)
+  - point probe (“why did this miss?”) and yellow target highlight
+- Service extensions register automatically in debug when a `HitScope`,
+  `HitLayer`, or `HitDefer` is created (`ensureHitDevToolsInitialized`).
+- Add optional `debugLabel` on `HitLayer`, `HitDefer`, `HitScope`, and
+  `SliverHitScope` (also on `HitDeferRegistration`) for DevTools / Inspector.
+
 ## 1.2.0
 
 **Breaking** deferred-hit API cleanup:

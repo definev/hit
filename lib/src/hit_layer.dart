@@ -1,6 +1,8 @@
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
+import 'hit_debug.dart';
+import 'hit_devtools.dart';
 import 'hit_link.dart';
 import 'hit_scope.dart';
 
@@ -43,6 +45,7 @@ class HitLayer extends MultiChildRenderObjectWidget {
     this.alignment = Alignment.center,
     this.behavior = HitTestBehavior.translucent,
     this.link,
+    this.debugLabel,
     required this.paintChild,
   }) : super(
           children: <Widget>[
@@ -70,14 +73,19 @@ class HitLayer extends MultiChildRenderObjectWidget {
   /// Optional link; defaults to the nearest [HitScope] when hit overflows.
   final HitLink? link;
 
+  /// Optional name for DevTools / Flutter Inspector (debug builds).
+  final String? debugLabel;
+
   @override
   RenderObject createRenderObject(BuildContext context) {
+    ensureHitDevToolsInitialized();
     return RenderHitLayer(
       alignment: alignment,
       behavior: behavior,
       hasHitChild: hitChild != null,
       textDirection: Directionality.maybeOf(context),
       link: _resolveLink(context),
+      debugLabel: debugLabel,
     );
   }
 
@@ -88,7 +96,8 @@ class HitLayer extends MultiChildRenderObjectWidget {
       ..behavior = behavior
       ..hasHitChild = hitChild != null
       ..textDirection = Directionality.maybeOf(context)
-      ..link = _resolveLink(context);
+      ..link = _resolveLink(context)
+      ..debugLabel = debugLabel;
   }
 
   HitLink? _resolveLink(BuildContext context) {
@@ -111,7 +120,8 @@ class HitLayer extends MultiChildRenderObjectWidget {
 class RenderHitLayer extends RenderBox
     with
         ContainerRenderObjectMixin<RenderBox, _HitLayerParentData>,
-        RenderBoxContainerDefaultsMixin<RenderBox, _HitLayerParentData>
+        RenderBoxContainerDefaultsMixin<RenderBox, _HitLayerParentData>,
+        HitDebugPaintMixin
     implements HitDeferRegistration {
   /// Creates a hit/paint layer render object.
   RenderHitLayer({
@@ -120,10 +130,12 @@ class RenderHitLayer extends RenderBox
     required bool hasHitChild,
     TextDirection? textDirection,
     HitLink? link,
+    String? debugLabel,
   })  : _alignment = alignment,
         _behavior = behavior,
         _hasHitChild = hasHitChild,
-        _textDirection = textDirection {
+        _textDirection = textDirection,
+        _debugLabel = debugLabel {
     this.link = link;
   }
 
@@ -142,6 +154,18 @@ class RenderHitLayer extends RenderBox
     if (attached) {
       _syncLinkRegistration();
     }
+  }
+
+  String? _debugLabel;
+
+  /// Optional name for DevTools / Flutter Inspector.
+  @override
+  String? get debugLabel => _debugLabel;
+  set debugLabel(String? value) {
+    if (_debugLabel == value) {
+      return;
+    }
+    _debugLabel = value;
   }
 
   AlignmentGeometry _alignment;
@@ -246,6 +270,22 @@ class RenderHitLayer extends RenderBox
 
   bool get _defersHit => _link != null && _hitOverflowsLayout;
 
+  /// Leader for [HitScope]'s composited deferred debug overlay.
+  ///
+  /// Allocated lazily and only while debug painting is enabled, so release
+  /// builds never pay for the [LayerLink].
+  LayerLink? _debugLeaderLink;
+
+  bool get _needsDebugLeader => _defersHit && hitDebugPaintingEnabled;
+
+  @override
+  LayerLink? get hitDebugLeaderLink =>
+      _needsDebugLeader ? (_debugLeaderLink ??= LayerLink()) : null;
+
+  @override
+  bool get alwaysNeedsCompositing =>
+      _needsDebugLeader || super.alwaysNeedsCompositing;
+
   Rect? _lastRegisteredBounds;
 
   /// Registers only when [hitChild] overflows layout size.
@@ -280,11 +320,13 @@ class RenderHitLayer extends RenderBox
   @override
   void attach(covariant PipelineOwner owner) {
     super.attach(owner);
+    attachHitDebugPaintListener();
     // Registration waits until performLayout knows overflow.
   }
 
   @override
   void detach() {
+    detachHitDebugPaintListener();
     _unlink();
     super.detach();
   }
@@ -343,7 +385,11 @@ class RenderHitLayer extends RenderBox
 
     // Re-evaluate deferred registration after layout (overflow may change).
     if (attached) {
+      final bool wasDeferring = _link != null && _link!.contains(this);
       _syncLinkRegistration();
+      if (wasDeferring != _defersHit) {
+        markNeedsCompositingBitsUpdate();
+      }
       assert(() {
         if (_hitOverflowsLayout && _link == null) {
           throw FlutterError(
@@ -360,6 +406,35 @@ class RenderHitLayer extends RenderBox
 
   @override
   void paint(PaintingContext context, Offset offset) {
+    // [_needsDebugLeader] is always false when asserts are disabled (release /
+    // profile), so this never introduces debug compositing outside debug.
+    if (_needsDebugLeader) {
+      // Anchor a leader so HitScope's debug follower tracks this layer (and
+      // paintChild) through scroll / transforms without a scope repaint.
+      final LayerLink debugLink = _debugLeaderLink ??= LayerLink();
+      final LeaderLayer leaderLayer = layer is LeaderLayer
+          ? layer! as LeaderLayer
+          : LeaderLayer(link: debugLink);
+      layer = leaderLayer
+        ..link = debugLink
+        ..offset = offset;
+      context.pushLayer(leaderLayer, _paintChildren, Offset.zero);
+    } else {
+      layer = null;
+      _paintChildren(context, offset);
+    }
+    // Non-deferred layers paint locally. Overflowing / deferred hit areas are
+    // drawn by the enclosing HitScope so intermediate clips do not hide them.
+    if (!_defersHit) {
+      paintHitDebugOverlayIfEnabled(
+        context,
+        deferredHitBounds.shift(offset),
+        target: this,
+      );
+    }
+  }
+
+  void _paintChildren(PaintingContext context, Offset offset) {
     final RenderBox? hit = hitRenderChild;
     if (hit != null) {
       final _HitLayerParentData hitData =
@@ -472,5 +547,13 @@ class RenderHitLayer extends RenderBox
       return false;
     }
     return _hitTestInternal(result, position);
+  }
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(
+      StringProperty('debugLabel', debugLabel, defaultValue: null),
+    );
   }
 }
