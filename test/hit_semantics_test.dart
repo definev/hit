@@ -247,13 +247,13 @@ void main() {
   });
 
   testWidgets('HitScope.maybeOf returns null without ancestor', (tester) async {
-    HitScopeState? state;
+    HitScopeHandle? handle;
 
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
           builder: (context) {
-            state = HitScope.maybeOf(context);
+            handle = HitScope.maybeOf(context);
             return const SizedBox();
           },
         ),
@@ -261,11 +261,11 @@ void main() {
     );
     await tester.pump();
 
-    expect(state, isNull);
+    expect(handle, isNull);
   });
 
   testWidgets('HitScope.maybeOf returns nearest scope state', (tester) async {
-    HitScopeState? state;
+    HitScopeHandle? handle;
     final link = HitLink();
 
     await tester.pumpWidget(
@@ -274,7 +274,7 @@ void main() {
           link: link,
           child: Builder(
             builder: (context) {
-              state = HitScope.maybeOf(context);
+              handle = HitScope.maybeOf(context);
               return const SizedBox();
             },
           ),
@@ -283,8 +283,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(state, isNotNull);
-    expect(identical(state!.link, link), isTrue);
+    expect(handle, isNotNull);
+    expect(identical(handle!.link, link), isTrue);
   });
 
   testWidgets('ClipRect above scope blocks overflow taps', (tester) async {

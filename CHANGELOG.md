@@ -1,3 +1,13 @@
+## 1.1.0
+
+- Add `SliverHitScope` / `SliverHitScopeState` for deferred hits inside
+  `CustomScrollView` (and other viewport) sliver trees.
+- Introduce `HitScopeHandle`; `HitScope.of` / `maybeOf` now return
+  `HitScopeHandle` and resolve the nearest `HitScope` **or** `SliverHitScope`
+  (`HitScopeState` / `SliverHitScopeState` both implement the handle).
+- Example: Basics + Slivers tabs; settings via `CupertinoMenuAnchor` on the
+  navigation bar.
+
 ## 1.0.0
 
 Stable release. Public API is the surface exported by `package:hit/hit.dart`:

@@ -15,13 +15,75 @@ class HitExampleApp extends StatelessWidget {
       title: 'hit example',
       debugShowCheckedModeBanner: false,
       theme: CupertinoThemeData(primaryColor: primaryColor),
-      home: HitDemoPage(),
+      home: HitHome(),
+    );
+  }
+}
+
+/// Tab shell: Basics demos + SliverHitScope list/grid demos. Shared settings.
+class HitHome extends StatefulWidget {
+  const HitHome({super.key});
+
+  @override
+  State<HitHome> createState() => _HitHomeState();
+}
+
+class _HitHomeState extends State<HitHome> {
+  bool _showHitArea = true;
+  bool _useHit = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoTabScaffold(
+      tabBar: CupertinoTabBar(
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.square_grid_2x2),
+            label: 'Basics',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.list_bullet),
+            label: 'Slivers',
+          ),
+        ],
+      ),
+      tabBuilder: (context, index) {
+        return CupertinoTabView(
+          builder: (context) {
+            return switch (index) {
+              0 => HitDemoPage(
+                useHit: _useHit,
+                showHitArea: _showHitArea,
+                onUseHitChanged: (v) => setState(() => _useHit = v),
+                onShowHitAreaChanged: (v) => setState(() => _showHitArea = v),
+              ),
+              _ => SliverHitDemoPage(
+                useHit: _useHit,
+                showHitArea: _showHitArea,
+                onUseHitChanged: (v) => setState(() => _useHit = v),
+                onShowHitAreaChanged: (v) => setState(() => _showHitArea = v),
+              ),
+            };
+          },
+        );
+      },
     );
   }
 }
 
 class HitDemoPage extends StatefulWidget {
-  const HitDemoPage({super.key});
+  const HitDemoPage({
+    super.key,
+    required this.useHit,
+    required this.showHitArea,
+    required this.onUseHitChanged,
+    required this.onShowHitAreaChanged,
+  });
+
+  final bool useHit;
+  final bool showHitArea;
+  final ValueChanged<bool> onUseHitChanged;
+  final ValueChanged<bool> onShowHitAreaChanged;
 
   @override
   State<HitDemoPage> createState() => _HitDemoPageState();
@@ -40,9 +102,6 @@ class _HitDemoPageState extends State<HitDemoPage> {
   int _clipRightTaps = 0;
   int _missingWrongTaps = 0;
   int _missingRightTaps = 0;
-  bool _showHitArea = true;
-  bool _useHit = true;
-  bool _settingsOpen = false;
   bool _scrollLocked = false;
   double _sliderValue = 0.45;
   Size _panelSize = const Size(140, 88);
@@ -50,6 +109,9 @@ class _HitDemoPageState extends State<HitDemoPage> {
 
   /// Orphan link — nothing walks it, so deferred hits never fire.
   final HitLink _orphanLink = HitLink();
+
+  bool get _useHit => widget.useHit;
+  bool get _showHitArea => widget.showHitArea;
 
   void _setScrollLocked(bool locked) {
     if (_scrollLocked == locked) return;
@@ -62,9 +124,7 @@ class _HitDemoPageState extends State<HitDemoPage> {
 
     return CupertinoPageScaffold(
       child: HitScope(
-        child: Stack(
-          children: [
-            CustomScrollView(
+        child: CustomScrollView(
               // Scrubbers (slider / edge / handle) lock scroll so the page
               // does not steal the gesture on small touch screens.
               physics: _scrollLocked
@@ -73,30 +133,27 @@ class _HitDemoPageState extends State<HitDemoPage> {
                       parent: AlwaysScrollableScrollPhysics(),
                     ),
               slivers: [
+                CupertinoSliverNavigationBar(
+                  largeTitle: const Text('hit'),
+                  trailing: _SettingsMenuButton(
+                    useHit: widget.useHit,
+                    showHitArea: widget.showHitArea,
+                    onUseHitChanged: widget.onUseHitChanged,
+                    onShowHitAreaChanged: widget.onShowHitAreaChanged,
+                  ),
+                ),
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(24, 56, 72, 16),
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
                   sliver: SliverToBoxAdapter(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'hit',
-                          style: text.navLargeTitleTextStyle.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                    child: Text(
+                      'Paint/layout size and hit size are separate. '
+                      'Open Settings for Use hit / Show hit areas. '
+                      'Slivers tab demos SliverHitScope with list and grid.',
+                      style: text.textStyle.copyWith(
+                        color: CupertinoColors.secondaryLabel.resolveFrom(
+                          context,
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Paint/layout size and hit size are separate. '
-                          'Open Settings for Use hit / Show hit areas. '
-                          'Scroll to Common mistakes to try the usual footguns.',
-                          style: text.textStyle.copyWith(
-                            color: CupertinoColors.secondaryLabel.resolveFrom(
-                              context,
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -391,92 +448,16 @@ class _HitDemoPageState extends State<HitDemoPage> {
                 ),
               ],
             ),
-            if (_settingsOpen)
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => setState(() => _settingsOpen = false),
-                  child: const ColoredBox(color: Color(0x33000000)),
-                ),
-              ),
-            Positioned(
-              top: 48,
-              right: 16,
-              child: _SettingsMenuButton(
-                open: _settingsOpen,
-                useHit: _useHit,
-                showHitArea: _showHitArea,
-                onOpenChanged: (v) => setState(() => _settingsOpen = v),
-                onUseHitChanged: (v) => setState(() => _useHit = v),
-                onShowHitAreaChanged: (v) => setState(() => _showHitArea = v),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
 }
 
-/// Gear + iOS-style popover. Menu hangs outside the button and uses [Hit.defer].
-class _SettingsMenuButton extends StatelessWidget {
-  const _SettingsMenuButton({
-    required this.open,
-    required this.useHit,
-    required this.showHitArea,
-    required this.onOpenChanged,
-    required this.onUseHitChanged,
-    required this.onShowHitAreaChanged,
-  });
-
-  final bool open;
-  final bool useHit;
-  final bool showHitArea;
-  final ValueChanged<bool> onOpenChanged;
-  final ValueChanged<bool> onUseHitChanged;
-  final ValueChanged<bool> onShowHitAreaChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 44,
-      height: 44,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.topRight,
-        children: [
-          CupertinoButton(
-            padding: EdgeInsets.zero,
-            onPressed: () => onOpenChanged(!open),
-            child: Icon(
-              CupertinoIcons.gear_solid,
-              size: 22,
-              color: CupertinoTheme.of(context).primaryColor,
-            ),
-          ),
-          if (open)
-            Positioned(
-              top: 44,
-              right: 0,
-              child: Hit.defer(
-                paintOnTop: true,
-                behavior: HitTestBehavior.opaque,
-                child: _SettingsPopover(
-                  useHit: useHit,
-                  showHitArea: showHitArea,
-                  onUseHitChanged: onUseHitChanged,
-                  onShowHitAreaChanged: onShowHitAreaChanged,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingsPopover extends StatelessWidget {
-  const _SettingsPopover({
+/// Demo tab: overflowing hits delivered by [SliverHitScope] inside a
+/// [CustomScrollView] — [SliverList] rows and [SliverGrid] cells.
+class SliverHitDemoPage extends StatefulWidget {
+  const SliverHitDemoPage({
+    super.key,
     required this.useHit,
     required this.showHitArea,
     required this.onUseHitChanged,
@@ -489,69 +470,163 @@ class _SettingsPopover extends StatelessWidget {
   final ValueChanged<bool> onShowHitAreaChanged;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 260,
-      decoration: BoxDecoration(
-        color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
-          context,
-        ),
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: CupertinoColors.black.withValues(alpha: 0.18),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _SettingsToggle(
-            title: 'Use hit',
-            subtitle: useHit
-                ? 'HitLayer / Hit.defer active'
-                : 'Plain Flutter — no hit package',
-            value: useHit,
-            onChanged: onUseHitChanged,
-          ),
-          Container(
-            height: 0.5,
-            color: CupertinoColors.separator.resolveFrom(context),
-          ),
-          _SettingsToggle(
-            title: 'Show hit areas',
-            subtitle: showHitArea
-                ? 'Green dashed outline = tappable region'
-                : 'Hit areas hidden',
-            value: showHitArea,
-            onChanged: onShowHitAreaChanged,
-          ),
-        ],
-      ),
-    );
-  }
+  State<SliverHitDemoPage> createState() => _SliverHitDemoPageState();
 }
 
-class _SettingsToggle extends StatelessWidget {
-  const _SettingsToggle({
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
+class _SliverHitDemoPageState extends State<SliverHitDemoPage> {
+  final Map<int, int> _listTaps = <int, int>{};
+  final Map<int, int> _gridTaps = <int, int>{};
 
   @override
   Widget build(BuildContext context) {
     final text = CupertinoTheme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+    final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
+
+    return CupertinoPageScaffold(
+      child: CustomScrollView(
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
+        slivers: [
+          CupertinoSliverNavigationBar(
+            largeTitle: const Text('Slivers'),
+            trailing: _SettingsMenuButton(
+              useHit: widget.useHit,
+              showHitArea: widget.showHitArea,
+              onUseHitChanged: widget.onUseHitChanged,
+              onShowHitAreaChanged: widget.onShowHitAreaChanged,
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+            sliver: SliverToBoxAdapter(
+              child: Text(
+                widget.useHit
+                    ? 'List and grid sit under SliverHitScope. '
+                        'Trash / icon paint stays small; expanded hits '
+                        'still work while you scroll.'
+                    : 'Same SliverHitScope, but controls use paint-sized '
+                        'hits only — corners outside the glyph miss.',
+                style: text.textStyle.copyWith(color: secondary),
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+            sliver: SliverToBoxAdapter(
+              child: Text(
+                'SliverList',
+                style: text.navTitleTextStyle.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          SliverHitScope(
+            sliver: SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              sliver: SliverList.builder(
+                itemCount: 24,
+                itemBuilder: (context, index) {
+                  final taps = _listTaps[index] ?? 0;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _SliverInboxRow(
+                      index: index,
+                      taps: taps,
+                      useHit: widget.useHit,
+                      showHitArea: widget.showHitArea,
+                      onTap: () => setState(() {
+                        _listTaps[index] = taps + 1;
+                      }),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'SliverGrid',
+                    style: text.navTitleTextStyle.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Each cell paints a 24×24 glyph with a 48×48 hit. '
+                    'Neighbors keep their layout.',
+                    style: text.textStyle.copyWith(color: secondary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SliverHitScope(
+            sliver: SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 48),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 1,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final taps = _gridTaps[index] ?? 0;
+                    return _SliverGridCell(
+                      index: index,
+                      taps: taps,
+                      useHit: widget.useHit,
+                      showHitArea: widget.showHitArea,
+                      onTap: () => setState(() {
+                        _gridTaps[index] = taps + 1;
+                      }),
+                    );
+                  },
+                  childCount: 18,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SliverInboxRow extends StatelessWidget {
+  const _SliverInboxRow({
+    required this.index,
+    required this.taps,
+    required this.useHit,
+    required this.showHitArea,
+    required this.onTap,
+  });
+
+  final int index;
+  final int taps;
+  final bool useHit;
+  final bool showHitArea;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = CupertinoColors.label.resolveFrom(context);
+    final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+      decoration: BoxDecoration(
+        color: CupertinoColors.secondarySystemBackground.resolveFrom(context),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Row(
         children: [
           Expanded(
@@ -559,23 +634,168 @@ class _SettingsToggle extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
-                  style: text.textStyle.copyWith(fontWeight: FontWeight.w600),
+                  'Message ${index + 1}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: label,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  subtitle,
-                  style: text.tabLabelTextStyle.copyWith(
-                    color: CupertinoColors.secondaryLabel.resolveFrom(context),
-                  ),
+                  taps == 0 ? 'Tap the trash corner' : '$taps deletes',
+                  style: TextStyle(fontSize: 13, color: secondary),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          CupertinoSwitch(value: value, onChanged: onChanged),
+          _ExpandHit(
+            useHit: useHit,
+            showHitArea: showHitArea,
+            onTap: onTap,
+            hitSize: const Size(48, 48),
+            paintChild: Icon(
+              CupertinoIcons.trash,
+              size: 20,
+              color: CupertinoColors.destructiveRed.resolveFrom(context),
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _SliverGridCell extends StatelessWidget {
+  const _SliverGridCell({
+    required this.index,
+    required this.taps,
+    required this.useHit,
+    required this.showHitArea,
+    required this.onTap,
+  });
+
+  final int index;
+  final int taps;
+  final bool useHit;
+  final bool showHitArea;
+  final VoidCallback onTap;
+
+  static const _icons = <IconData>[
+    CupertinoIcons.heart,
+    CupertinoIcons.star,
+    CupertinoIcons.bookmark,
+    CupertinoIcons.flag,
+    CupertinoIcons.bell,
+    CupertinoIcons.tag,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
+    final icon = _icons[index % _icons.length];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: CupertinoColors.secondarySystemBackground.resolveFrom(context),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (useHit)
+            HitLayer(
+              alignment: Alignment.center,
+              behavior: HitTestBehavior.deferToChild,
+              hitChild: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onTap,
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: showHitArea ? const _HitGhost() : null,
+                ),
+              ),
+              paintChild: IgnorePointer(
+                child: Icon(icon, size: 24),
+              ),
+            )
+          else
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: Icon(icon, size: 24),
+            ),
+          const SizedBox(height: 8),
+          Text(
+            taps == 0 ? '#${index + 1}' : '$taps',
+            style: TextStyle(fontSize: 13, color: secondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Settings gear that opens a [CupertinoMenuAnchor] with toggle items.
+class _SettingsMenuButton extends StatelessWidget {
+  const _SettingsMenuButton({
+    required this.useHit,
+    required this.showHitArea,
+    required this.onUseHitChanged,
+    required this.onShowHitAreaChanged,
+  });
+
+  final bool useHit;
+  final bool showHitArea;
+  final ValueChanged<bool> onUseHitChanged;
+  final ValueChanged<bool> onShowHitAreaChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoMenuAnchor(
+      consumeOutsideTaps: true,
+      builder: (context, controller, child) {
+        return CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () {
+            if (controller.isOpen) {
+              controller.close();
+            } else {
+              controller.open();
+            }
+          },
+          child: const Icon(CupertinoIcons.settings),
+        );
+      },
+      menuChildren: [
+        CupertinoMenuItem(
+          subtitle: Text(
+            useHit
+                ? 'HitLayer / Hit.defer active'
+                : 'Plain Flutter — no hit package',
+          ),
+          trailing: useHit
+              ? const Icon(CupertinoIcons.check_mark)
+              : const SizedBox.shrink(),
+          requestCloseOnActivate: false,
+          onPressed: () => onUseHitChanged(!useHit),
+          child: const Text('Use hit'),
+        ),
+        const CupertinoMenuDivider(),
+        CupertinoMenuItem(
+          subtitle: Text(
+            showHitArea
+                ? 'Green dashed outline = tappable region'
+                : 'Hit areas hidden',
+          ),
+          trailing: showHitArea
+              ? const Icon(CupertinoIcons.check_mark)
+              : const SizedBox.shrink(),
+          requestCloseOnActivate: false,
+          onPressed: () => onShowHitAreaChanged(!showHitArea),
+          child: const Text('Show hit areas'),
+        ),
+      ],
     );
   }
 }

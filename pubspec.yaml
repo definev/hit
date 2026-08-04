@@ -1,6 +1,6 @@
 name: hit
 description: Decouple Flutter layout size from hit-test size, and deliver taps outside parent bounds.
-version: 1.0.0
+version: 1.1.0
 repository: https://github.com/definev/hit
 homepage: https://github.com/definev/hit
 issue_tracker: https://github.com/definev/hit/issues

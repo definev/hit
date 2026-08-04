@@ -19,14 +19,14 @@ Flutter layout and hit-testing share the same box. Growing padding to enlarge a 
 | Piece | Role |
 | --- | --- |
 | `HitLayer` | Layout follows `paintChild`; `hitChild` can be larger and overflow |
-| `HitScope` | Delivers overflow / out-of-bounds hits to registered targets |
+| `HitScope` / `SliverHitScope` | Delivers overflow / out-of-bounds hits to registered targets |
 | `Hit.defer` / `Hit.before` | Explicit deferred hit (and optional paint) outside parent bounds |
 
 ## Install
 
 ```yaml
 dependencies:
-  hit: ^1.0.0
+  hit: ^1.1.0
 ```
 
 ```dart
@@ -38,7 +38,7 @@ import 'package:hit/hit.dart';
 
 Stable surface from `package:hit/hit.dart`:
 
-- `HitLayer`, `HitScope` / `HitScopeState`
+- `HitLayer`, `HitScope` / `HitScopeState`, `SliverHitScope` / `SliverHitScopeState`, `HitScopeHandle`
 - `Hit.defer` / `Hit.before`
 - `HitLink`, `HitDeferRegistration`
 
@@ -176,12 +176,35 @@ HitScope(
 )
 ```
 
-- Nesting is supported; **nearest** scope wins (`HitScope.maybeOf` / `of`).
+- Nesting is supported; **nearest** scope wins (`HitScope.maybeOf` / `of`), including across `HitScope` and `SliverHitScope`.
 - Prefer many small scopes over one app-wide scope — but each scope’s **layout box must cover** the deferred hit areas it serves.
 - Pass an explicit `link` to register with an outer scope instead of the nearest one.
 - `HitScope.of` throws a `FlutterError` when no scope is found; use `maybeOf` when absence is allowed.
 
 Deferred hit walk order is **newest-first**.
+
+### `SliverHitScope`
+
+Same deferred contract as `HitScope`, for sliver subtrees inside a `CustomScrollView` (or other viewport):
+
+```dart
+CustomScrollView(
+  slivers: [
+    SliverHitScope(
+      // link: myLink,
+      sliver: SliverList.list(
+        children: [
+          // HitLayer / Hit.defer descendants
+        ],
+      ),
+    ),
+  ],
+)
+```
+
+- Put it in the `slivers` list (or nest it under another sliver parent). Do **not** pass a box child directly — wrap boxes with `SliverToBoxAdapter` / list / grid slivers as usual.
+- Coverage rule: the pointer must land inside this sliver’s hit-test extent (and cross-axis extent). Overflow that leaves the sliver (or the viewport) still needs a larger enclosing scope.
+- `HitScope.of` / `maybeOf` find `SliverHitScope` the same way they find `HitScope`.
 
 ### `Hit.defer` / `Hit.before`
 
