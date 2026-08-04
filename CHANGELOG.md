@@ -1,3 +1,13 @@
+## 0.3.2
+
+- Fix deferred targets staying on a stale registry when `HitScope.link` changes
+  at runtime (inherited notify + re-registration).
+- Make overflowing `HitLayer` without a `HitScope`/`link` reject hits outside
+  the layout box in release (same contract as the debug assert).
+- Remove unused per-pass AABB cache; skip no-op `RenderHitScope.link` updates.
+- Add `HitLayer.computeDryLayout`; lazy-create the scope's internal `HitLink`.
+- Harden `Hit.defer` null-child hit paths; expand link-swap and overflow tests.
+
 ## 0.3.1
 
 - Add package banner and `screenshots` for pub.dev display.
