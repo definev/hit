@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 
@@ -6,14 +8,32 @@ import 'package:flutter/rendering.dart';
 /// Owned by [HitScope] by default. Pass an explicit instance to share a
 /// registry across scopes, or to register a target with a non-nearest scope.
 ///
-/// Listeners are notified when targets are added/removed, when geometry may
-/// have changed ([markGeometryDirty]), or when a deferred descendant needs
-/// paint ([descendantNeedsPaint]).
-class HitLink extends ChangeNotifier {
+/// Paint and geometry notifications are separate:
+///
+/// * [paintListenable] / [descendantNeedsPaint] — membership changes and
+///   deferred paint invalidation (scopes subscribe to repaint followers).
+/// * [geometryListenable] / [markGeometryDirty] — bounds/transform may have
+///   changed. Hit testing recomputes transforms each pass, so scopes do
+///   **not** repaint on geometry alone (composited [HitDeferPaint.onTop]
+///   tracks scroll without a scope repaint).
+class HitLink {
   /// Creates an empty deferred-target registry.
   HitLink();
 
   final List<HitDeferRegistration> _targets = <HitDeferRegistration>[];
+  final Set<HitDeferRegistration> _targetSet = HashSet<HitDeferRegistration>(
+    equals: identical,
+    hashCode: identityHashCode,
+  );
+
+  final _HitLinkSignal _paint = _HitLinkSignal();
+  final _HitLinkSignal _geometry = _HitLinkSignal();
+
+  /// Notified on [add] / [remove] / [removeAll] and [descendantNeedsPaint].
+  Listenable get paintListenable => _paint;
+
+  /// Notified on [markGeometryDirty].
+  Listenable get geometryListenable => _geometry;
 
   /// Snapshot of registered targets for tests / introspection.
   ///
@@ -23,18 +43,36 @@ class HitLink extends ChangeNotifier {
   List<HitDeferRegistration> get targets =>
       List<HitDeferRegistration>.unmodifiable(_targets);
 
-  /// Whether [target] is currently registered.
-  bool contains(HitDeferRegistration target) => _targets.contains(target);
+  /// Whether [target] is currently registered (identity, O(1)).
+  bool contains(HitDeferRegistration target) => _targetSet.contains(target);
 
-  /// Notifies listeners that a deferred descendant needs to be painted.
+  /// Adds a paint listener (membership / deferred paint).
+  void addPaintListener(VoidCallback listener) => _paint.addListener(listener);
+
+  /// Removes a paint listener.
+  void removePaintListener(VoidCallback listener) =>
+      _paint.removeListener(listener);
+
+  /// Adds a geometry listener (bounds / transforms).
+  void addGeometryListener(VoidCallback listener) =>
+      _geometry.addListener(listener);
+
+  /// Removes a geometry listener.
+  void removeGeometryListener(VoidCallback listener) =>
+      _geometry.removeListener(listener);
+
+  /// Notifies [paintListenable] that a deferred descendant needs paint.
   ///
-  /// Used by paint-deferred targets so the enclosing HitScope can repaint
-  /// without the target painting locally.
-  void descendantNeedsPaint() => notifyListeners();
+  /// Used by [HitDeferPaint.onTop] targets so the enclosing HitScope can
+  /// sync follower layers without the target painting locally.
+  void descendantNeedsPaint() => _paint.notify();
 
-  /// Notifies listeners that registered targets' bounds or transforms may
+  /// Notifies [geometryListenable] that targets' bounds or transforms may
   /// have changed.
-  void markGeometryDirty() => notifyListeners();
+  ///
+  /// Does **not** notify paint listeners — hit testing reads live transforms,
+  /// and composited on-top paint tracks scroll via leader/follower.
+  void markGeometryDirty() => _geometry.notify();
 
   /// Invokes [action] for each target in registration order (oldest first).
   void forEach(void Function(HitDeferRegistration target) action) {
@@ -62,35 +100,48 @@ class HitLink extends ChangeNotifier {
     return false;
   }
 
-  /// Registers [target] if it is not already present and notifies listeners.
+  /// Registers [target] if it is not already present and notifies paint
+  /// listeners.
   void add(HitDeferRegistration target) {
-    if (!_targets.contains(target)) {
+    if (_targetSet.add(target)) {
       _targets.add(target);
-      notifyListeners();
+      _paint.notify();
     }
   }
 
-  /// Unregisters [target] if present and notifies listeners.
+  /// Unregisters [target] if present and notifies paint listeners.
   void remove(HitDeferRegistration target) {
-    if (_targets.remove(target)) {
-      notifyListeners();
+    if (_targetSet.remove(target)) {
+      _targets.remove(target);
+      _paint.notify();
     }
   }
 
-  /// Clears all registered targets and notifies listeners when any were
+  /// Clears all registered targets and notifies paint listeners when any were
   /// removed.
   void removeAll() {
     if (_targets.isNotEmpty) {
       _targets.clear();
-      notifyListeners();
+      _targetSet.clear();
+      _paint.notify();
     }
   }
+
+  /// Disposes paint and geometry listenables.
+  void dispose() {
+    _paint.dispose();
+    _geometry.dispose();
+  }
+}
+
+class _HitLinkSignal extends ChangeNotifier {
+  void notify() => notifyListeners();
 }
 
 /// Contract implemented by render objects that participate in deferred hit
 /// testing and optional deferred paint.
 ///
-/// Implemented by deferred hit targets (`Hit.defer` / `Hit.before`) and by
+/// Implemented by deferred hit targets ([HitDefer]) and by
 /// [HitLayer] when its hit child overflows layout size.
 abstract class HitDeferRegistration {
   /// Box used for deferred paint positioning; null if this target does not
@@ -118,15 +169,21 @@ abstract class HitDeferRegistration {
   /// subtree. [HitTestBehavior.translucent] still allows the subtree walk.
   HitTestBehavior get hitBehavior;
 
-  /// Whether [HitScope] should paint this target after the scoped subtree.
-  bool get deferPaintOnTop;
+  /// How [HitScope] paints this target relative to the scoped subtree.
+  HitDeferPaint get deferPaint;
 
-  /// Whether [HitScope] should paint this target under the scoped subtree.
-  bool get deferPaintUnder;
-
-  /// Leader link for composited [deferPaintOnTop] paint. Null when unused.
+  /// Leader link for composited [HitDeferPaint.onTop] paint. Null when unused.
   ///
   /// [HitScope] paints a [FollowerLayer] so deferred paint tracks scroll /
   /// transforms without requiring the scope to repaint every frame.
   LayerLink? get deferredPaintLink;
+}
+
+/// How a deferred target is painted by its enclosing [HitScope].
+enum HitDeferPaint {
+  /// Child paints in place; only hit testing is deferred.
+  none,
+
+  /// [HitScope] paints after the scoped subtree via a composited follower.
+  onTop,
 }

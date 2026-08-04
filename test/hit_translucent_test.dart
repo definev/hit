@@ -28,7 +28,7 @@ void main() {
                   Positioned(
                     left: 10,
                     top: 10,
-                    child: Hit.defer(
+                    child: HitDefer(
                       child: Listener(
                         key: const Key('deferred'),
                         onPointerDown: (_) => deferredDown = true,

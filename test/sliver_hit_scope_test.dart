@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hit/hit.dart';
 
 void main() {
-  testWidgets('SliverHitScope delivers Hit.defer taps outside parent bounds', (
+  testWidgets('SliverHitScope delivers HitDefer taps outside parent bounds', (
     tester,
   ) async {
     var tapped = false;
@@ -26,7 +26,7 @@ void main() {
                           children: [
                             Positioned(
                               bottom: -30,
-                              child: Hit.defer(
+                              child: HitDefer(
                                 child: GestureDetector(
                                   key: const Key('defer_btn'),
                                   onTap: () => tapped = true,
@@ -155,7 +155,7 @@ void main() {
   });
 
   testWidgets(
-    'Hit.defer paintOnTop tracks scroll under SliverHitScope',
+    'HitDefer paint onTop tracks scroll under SliverHitScope',
     (tester) async {
       final controller = ScrollController();
 
@@ -184,8 +184,8 @@ void main() {
                                 Positioned(
                                   right: -10,
                                   top: -10,
-                                  child: Hit.defer(
-                                    paintOnTop: true,
+                                  child: HitDefer(
+                                    paint: HitDeferPaint.onTop,
                                     child: const ColoredBox(
                                       key: Key('paint_on_top'),
                                       color: Colors.red,

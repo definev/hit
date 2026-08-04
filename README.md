@@ -8,7 +8,7 @@ Use it when a control must stay visually small (icon, grip, 1px edge, chip ×) b
 
 **Live demo:** [hit-one-snowy.vercel.app](https://hit-one-snowy.vercel.app/)
 
-Deferred out-of-bounds hit testing is inspired by [`defer_pointer`](https://pub.dev/packages/defer_pointer) ([gskinnerTeam/flutter-defer-pointer](https://github.com/gskinnerTeam/flutter-defer-pointer)): a handler higher in the tree (`HitScope`) receives hits for targets that opt out of local hit-testing (`Hit.defer` / overflowing `HitLayer`).
+Deferred out-of-bounds hit testing is inspired by [`defer_pointer`](https://pub.dev/packages/defer_pointer) ([gskinnerTeam/flutter-defer-pointer](https://github.com/gskinnerTeam/flutter-defer-pointer)): a handler higher in the tree (`HitScope`) receives hits for targets that opt out of local hit-testing (`HitDefer` / overflowing `HitLayer`).
 
 ## Why
 
@@ -20,13 +20,13 @@ Flutter layout and hit-testing share the same box. Growing padding to enlarge a 
 | --- | --- |
 | `HitLayer` | Layout follows `paintChild`; `hitChild` can be larger and overflow |
 | `HitScope` / `SliverHitScope` | Delivers overflow / out-of-bounds hits to registered targets |
-| `Hit.defer` / `Hit.before` | Explicit deferred hit (and optional paint) outside parent bounds |
+| `HitDefer` | Explicit deferred hit (and optional paint) outside parent bounds |
 
 ## Install
 
 ```yaml
 dependencies:
-  hit: ^1.1.0
+  hit: ^1.2.0
 ```
 
 ```dart
@@ -39,8 +39,28 @@ import 'package:hit/hit.dart';
 Stable surface from `package:hit/hit.dart`:
 
 - `HitLayer`, `HitScope` / `HitScopeState`, `SliverHitScope` / `SliverHitScopeState`, `HitScopeHandle`
-- `Hit.defer` / `Hit.before`
+- `HitDefer`, `HitDeferPaint`
 - `HitLink`, `HitDeferRegistration`
+
+### Migrating from 1.1.x
+
+`1.2.0` is a **breaking** release for deferred hits:
+
+| Before (`≤1.1`) | After (`1.2`) |
+| --- | --- |
+| `Hit.defer(child: w)` | `HitDefer(child: w)` |
+| `Hit.defer(paintOnTop: true, child: w)` | `HitDefer(paint: HitDeferPaint.onTop, child: w)` |
+| `Hit.before(child: w)` | `HitDefer(paint: HitDeferPaint.onTop, child: w)` |
+| `target.deferPaintOnTop` / `deferPaintUnder` | `target.deferPaint` (`HitDeferPaint`) |
+| `link.addListener` / `removeListener` | `addPaintListener` / `removePaintListener` |
+
+`HitDeferPaint`: `none` (default, paint in place) or `onTop` (after scoped
+subtree, composited scroll tracking). Under-scope deferred paint
+(`Hit.before` / `paintUnder`) is removed — use `onTop` instead.
+
+`HitLink` splits paint vs geometry notifications: `markGeometryDirty` no
+longer forces a scope repaint (hit testing uses live transforms; `onTop`
+paint tracks scroll via compositing).
 
 ## Quick start
 
@@ -132,7 +152,7 @@ Wrapping `HitScope` only around the tiny control leaves the expanded hit area ou
 
 ### Mistake 3 — missing `HitScope`
 
-Overflowing `HitLayer` and `Hit.defer` / `Hit.before` need a scope (or an explicit `HitLink` wired to one). Without it, only the layout box is hittable; debug builds assert.
+Overflowing `HitLayer` and `HitDefer` need a scope (or an explicit `HitLink` wired to one). Without it, only the layout box is hittable; debug builds assert.
 
 ```text
   pointer → parent walk → HitLayer layout box only
@@ -149,7 +169,6 @@ Overflowing `HitLayer` and `Hit.defer` / `Hit.before` need a scope (or an explic
 | Works in center, fails on overflow | Scope too tight or clip above | Cover overflow; move scope above clip |
 | Assert / no hits outside box | No `HitScope` | Add one that covers the hit area |
 | Wrong nested target wins | Nearest scope / walk order | Use explicit `link`, or restructure scopes |
-| Scroll paint lag with `Hit.before` | Scope repaint path | Prefer `Hit.defer(paintOnTop: true)` |
 
 ## API
 
@@ -194,7 +213,7 @@ CustomScrollView(
       // link: myLink,
       sliver: SliverList.list(
         children: [
-          // HitLayer / Hit.defer descendants
+          // HitLayer / HitDefer descendants
         ],
       ),
     ),
@@ -206,7 +225,7 @@ CustomScrollView(
 - Coverage rule: the pointer must land inside this sliver’s hit-test extent (and cross-axis extent). Overflow that leaves the sliver (or the viewport) still needs a larger enclosing scope.
 - `HitScope.of` / `maybeOf` find `SliverHitScope` the same way they find `HitScope`.
 
-### `Hit.defer` / `Hit.before`
+### `HitDefer`
 
 For widgets that hang outside a parent without using `HitLayer`. Keep the hanging child inside the scope’s layout box (padding is the usual fix):
 
@@ -225,7 +244,8 @@ HitScope(
           Positioned(
             right: -12,
             top: -12,
-            child: Hit.defer(
+            child: HitDefer(
+              paint: HitDeferPaint.onTop, // or none (default)
               behavior: HitTestBehavior.opaque,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -241,9 +261,16 @@ HitScope(
 )
 ```
 
-- `Hit.defer` — deferred hit; optional `paintOnTop: true` to paint after the scoped subtree (tracks scroll via compositing)
-- `Hit.before` — deferred hit and paint **under** the scoped subtree (prefer `paintOnTop` when you need composited scroll tracking)
-- `behavior` defaults to `translucent`; use `opaque` when a hit should stop further deferred scanning **and** skip the scoped subtree
+- **`paint`** — `HitDeferPaint.none` (default: paint in place) or `onTop` (after the scoped subtree via composited follower; tracks scroll)
+- **`behavior`** — defaults to `translucent`; use `opaque` when a hit should stop further deferred scanning **and** skip the scoped subtree
+- **`link`** — optional; defaults to the nearest `HitScope`
+
+### `HitDeferPaint`
+
+| Value | Paint |
+| --- | --- |
+| `none` | In place (hit only deferred) |
+| `onTop` | After scoped subtree (composited; tracks scroll) |
 
 ### `HitTestBehavior`
 
@@ -252,7 +279,7 @@ Defaults differ by API and are intentional:
 | API | Default |
 | --- | --- |
 | `HitLayer` | `opaque` |
-| `Hit.defer` / `Hit.before` | `translucent` |
+| `HitDefer` | `translucent` |
 
 | Value | Meaning |
 | --- | --- |
@@ -264,6 +291,11 @@ Defaults differ by API and are intentional:
 
 Registry of deferred targets for a scope. Usually owned by `HitScope`; pass explicitly to share or target a non-nearest scope. `HitDeferRegistration` is the extension contract implemented by deferred targets.
 
+Membership uses identity (`identical`) for O(1) `contains` / `add`. Paint and geometry notifications are split:
+
+- **`paintListenable`** — `add` / `remove` / `descendantNeedsPaint` (scopes repaint followers)
+- **`geometryListenable`** — `markGeometryDirty` only (does **not** force a scope repaint; hit testing reads live transforms, and `onTop` paint tracks scroll via compositing)
+
 ## Performance notes
 
 Deferred hit-testing is **O(n)** over registered targets on that scope. To keep it fast:
@@ -273,7 +305,7 @@ Deferred hit-testing is **O(n)** over registered targets on that scope. To keep 
 3. Prefer `deferToChild` / `opaque` over `translucent` when you do not need dual hits
 4. Keep `hitChild` shallow (`GestureDetector` + `SizedBox`)
 5. Avoid nesting deferred targets under one huge root scope
-6. Use `Hit.defer` only when you need out-of-bounds delivery
+6. Use `HitDefer` only when you need out-of-bounds delivery
 
 A handful of min-target / edge / handle layers is cheap. Hundreds of deferred targets under one scope is not.
 
@@ -281,7 +313,7 @@ A handful of min-target / edge / handle layers is cheap. Hundreds of deferred ta
 
 Live demo: [https://hit-one-snowy.vercel.app/](https://hit-one-snowy.vercel.app/)
 
-One-page demo covering `HitLayer`, `Hit.defer` / `Hit.before`, common controls (chip dismiss, resize handle, window edge, list action, slider thumb), and Wrong vs Right for the common mistakes above:
+One-page demo covering `HitLayer`, `HitDefer`, common controls (chip dismiss, `Text.rich` / `WidgetSpan`, resize handle, window edge, list action, slider thumb), and Wrong vs Right for the common mistakes above:
 
 ```bash
 cd example

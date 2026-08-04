@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hit/hit.dart';
 
 void main() {
-  testWidgets('Hit.before receives taps outside parent bounds', (tester) async {
+  testWidgets('HitDefer receives taps outside parent bounds', (tester) async {
     var tapped = false;
 
     await tester.pumpWidget(
@@ -22,10 +22,10 @@ void main() {
                         child: ColoredBox(color: Colors.green)),
                     Positioned(
                       bottom: -30,
-                      child: Hit.before(
+                      child: HitDefer(
                         behavior: HitTestBehavior.opaque,
                         child: GestureDetector(
-                          key: const Key('before_btn'),
+                          key: const Key('defer_btn'),
                           onTap: () => tapped = true,
                           child: const ColoredBox(
                             color: Colors.blue,
@@ -44,7 +44,7 @@ void main() {
     );
 
     await tester.pump();
-    await tester.tap(find.byKey(const Key('before_btn')));
+    await tester.tap(find.byKey(const Key('defer_btn')));
     await tester.pump();
 
     expect(tapped, isTrue);
@@ -75,7 +75,7 @@ void main() {
                       Positioned(
                         right: -20,
                         top: -20,
-                        child: Hit.defer(
+                        child: HitDefer(
                           behavior: HitTestBehavior.opaque,
                           child: GestureDetector(
                             key: const Key('nested_badge'),
@@ -131,7 +131,7 @@ void main() {
                       Positioned(
                         right: -20,
                         top: -20,
-                        child: Hit.defer(
+                        child: HitDefer(
                           link: outerLink,
                           behavior: HitTestBehavior.opaque,
                           child: GestureDetector(
@@ -188,7 +188,7 @@ void main() {
                   Positioned(
                     left: 10,
                     top: 10,
-                    child: Hit.defer(
+                    child: HitDefer(
                       behavior: HitTestBehavior.opaque,
                       child: Listener(
                         key: const Key('deferred_opaque'),
@@ -304,7 +304,7 @@ void main() {
                     Positioned(
                       right: -20,
                       top: 30,
-                      child: Hit.defer(
+                      child: HitDefer(
                         behavior: HitTestBehavior.opaque,
                         child: GestureDetector(
                           key: const Key('clipped_badge'),
@@ -336,7 +336,7 @@ void main() {
     expect(tapped, isFalse);
   });
 
-  testWidgets('Hit.defer remains tappable under Transform.translate', (
+  testWidgets('HitDefer remains tappable under Transform.translate', (
     tester,
   ) async {
     var tapped = false;
@@ -358,7 +358,7 @@ void main() {
                       Positioned(
                         right: -20,
                         top: -20,
-                        child: Hit.defer(
+                        child: HitDefer(
                           behavior: HitTestBehavior.opaque,
                           child: GestureDetector(
                             key: const Key('transformed_badge'),

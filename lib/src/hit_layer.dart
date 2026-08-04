@@ -209,10 +209,7 @@ class RenderHitLayer extends RenderBox
   }
 
   @override
-  bool get deferPaintOnTop => false;
-
-  @override
-  bool get deferPaintUnder => false;
+  HitDeferPaint get deferPaint => HitDeferPaint.none;
 
   @override
   LayerLink? get deferredPaintLink => null;

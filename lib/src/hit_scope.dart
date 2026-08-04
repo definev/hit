@@ -15,7 +15,7 @@ abstract interface class HitScopeHandle {
 /// Ancestor that hit-tests (and optionally paints) deferred targets outside
 /// normal parent bounds.
 ///
-/// Targets register via [Hit.defer], [Hit.before], or an overflowing
+/// Targets register via [HitDefer] or an overflowing
 /// [HitLayer]. Nesting is supported; [of] / [maybeOf] resolve to the nearest
 /// enclosing scope ([HitScope] or [SliverHitScope]). Prefer many small scopes
 /// around overflow regions over one app-wide scope.
@@ -59,7 +59,7 @@ class HitScope extends StatefulWidget {
           'the context that was passed to HitScope.of().',
         ),
         ErrorHint(
-          'Hit.defer / Hit.before and overflowing HitLayer widgets require a '
+          'HitDefer and overflowing HitLayer widgets require a '
           'HitScope or SliverHitScope ancestor whose layout covers the '
           'deferred hit area.',
         ),
@@ -126,8 +126,8 @@ class HitScopeState extends State<HitScope> implements HitScopeHandle {
 /// Sliver ancestor that hit-tests (and optionally paints) deferred targets
 /// outside normal child bounds inside a [CustomScrollView] (or other viewport).
 ///
-/// Same deferred contract as [HitScope]: targets register via [Hit.defer],
-/// [Hit.before], or an overflowing [HitLayer]. [HitScope.of] / [maybeOf]
+/// Same deferred contract as [HitScope]: targets register via [HitDefer]
+/// or an overflowing [HitLayer]. [HitScope.of] / [maybeOf]
 /// resolve to this scope when it is the nearest enclosing scope.
 ///
 /// Place this in a `slivers` list (or as another sliver's child). Deferred
@@ -140,7 +140,7 @@ class HitScopeState extends State<HitScope> implements HitScopeHandle {
 ///   slivers: [
 ///     SliverHitScope(
 ///       sliver: SliverList.builder(
-///         itemBuilder: (context, index) => /* HitLayer / Hit.defer */,
+///         itemBuilder: (context, index) => /* HitLayer / HitDefer */,
 ///       ),
 ///     ),
 ///   ],
@@ -267,16 +267,16 @@ mixin _HitScopeDeferredMixin on RenderObject {
     if (identical(oldLink, newLink)) {
       return;
     }
-    oldLink?.removeListener(_onLinkChanged);
-    newLink.addListener(_onLinkChanged);
+    oldLink?.removePaintListener(_onLinkPaint);
+    newLink.addPaintListener(_onLinkPaint);
     markNeedsPaint();
   }
 
   void _detachLink(HitLink? link) {
-    link?.removeListener(_onLinkChanged);
+    link?.removePaintListener(_onLinkPaint);
   }
 
-  void _onLinkChanged() {
+  void _onLinkPaint() {
     markNeedsPaint();
   }
 
@@ -331,27 +331,11 @@ mixin _HitScopeDeferredMixin on RenderObject {
     return opaqueHit;
   }
 
-  void paintDeferredUnder(PaintingContext context, Offset offset) {
-    link.forEach((HitDeferRegistration target) {
-      if (!target.deferPaintUnder) {
-        return;
-      }
-      final RenderBox? deferChild = target.registeredChild;
-      if (deferChild == null) {
-        return;
-      }
-      context.paintChild(
-        deferChild,
-        deferChild.localToGlobal(Offset.zero, ancestor: this) + offset,
-      );
-    });
-  }
-
   void paintDeferredOnTop(PaintingContext context, Offset offset) {
     final Set<HitDeferRegistration> painted = <HitDeferRegistration>{};
 
     link.forEach((HitDeferRegistration target) {
-      if (!target.deferPaintOnTop) {
+      if (target.deferPaint != HitDeferPaint.onTop) {
         return;
       }
       final LayerLink? paintLink = target.deferredPaintLink;
@@ -417,13 +401,13 @@ mixin _HitScopeDeferredMixin on RenderObject {
 /// opaque deferred hit stops further deferred scanning but still allows the
 /// walk to return without testing remaining deferred targets.
 ///
-/// Paint order: [Hit.before] targets, then the child, then [Hit.defer]
-/// `paintOnTop` targets (via retained [FollowerLayer]s).
+/// Paint order: the child, then [HitDeferPaint.onTop] targets (via retained
+/// [FollowerLayer]s).
 class RenderHitScope extends RenderProxyBox with _HitScopeDeferredMixin {
   /// Creates a scope render object bound to [link].
   RenderHitScope(HitLink link, [RenderBox? child]) : super(child) {
     _link = link;
-    link.addListener(_onLinkChanged);
+    link.addPaintListener(_onLinkPaint);
   }
 
   HitLink? _link;
@@ -471,7 +455,6 @@ class RenderHitScope extends RenderProxyBox with _HitScopeDeferredMixin {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    paintDeferredUnder(context, offset);
     super.paint(context, offset);
     paintDeferredOnTop(context, offset);
   }
@@ -487,7 +470,7 @@ class RenderSliverHitScope extends RenderProxySliver
   /// Creates a sliver scope render object bound to [link].
   RenderSliverHitScope(HitLink link, [RenderSliver? child]) : super(child) {
     _link = link;
-    link.addListener(_onLinkChanged);
+    link.addPaintListener(_onLinkPaint);
   }
 
   HitLink? _link;
@@ -598,7 +581,6 @@ class RenderSliverHitScope extends RenderProxySliver
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    paintDeferredUnder(context, offset);
     super.paint(context, offset);
     paintDeferredOnTop(context, offset);
   }

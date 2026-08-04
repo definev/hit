@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hit/hit.dart';
 
 void main() {
-  testWidgets('Hit.defer receives taps outside parent bounds', (tester) async {
+  testWidgets('HitDefer receives taps outside parent bounds', (tester) async {
     var tapped = false;
 
     await tester.pumpWidget(
@@ -18,7 +18,7 @@ void main() {
                 children: [
                   Positioned(
                     bottom: -30,
-                    child: Hit.defer(
+                    child: HitDefer(
                       child: GestureDetector(
                         key: const Key('defer_btn'),
                         onTap: () => tapped = true,
@@ -52,7 +52,7 @@ void main() {
       MaterialApp(
         home: HitScope(
           link: link,
-          child: Hit.defer(
+          child: HitDefer(
             link: link,
             child: const ColoredBox(
               color: Colors.blue,
@@ -134,7 +134,7 @@ void main() {
   );
 
   testWidgets(
-    'Hit.defer paintOnTop tracks scroll under HitScope',
+    'HitDefer paint onTop tracks scroll under HitScope',
     (tester) async {
       final controller = ScrollController();
 
@@ -161,8 +161,8 @@ void main() {
                             Positioned(
                               right: -10,
                               top: -10,
-                              child: Hit.defer(
-                                paintOnTop: true,
+                              child: HitDefer(
+                                paint: HitDeferPaint.onTop,
                                 child: const ColoredBox(
                                   key: Key('paint_on_top'),
                                   color: Colors.red,
@@ -232,7 +232,7 @@ void main() {
                     children: [
                       Positioned(
                         bottom: -30,
-                        child: Hit.defer(
+                        child: HitDefer(
                           child: GestureDetector(
                             key: const Key('defer_btn'),
                             onTap: () => tapped = true,
@@ -292,7 +292,7 @@ void main() {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Hit.defer(
+                    HitDefer(
                       child: const ColoredBox(
                         color: Colors.blue,
                         child: SizedBox(width: 10, height: 10),

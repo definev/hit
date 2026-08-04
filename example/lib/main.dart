@@ -93,7 +93,6 @@ class _HitDemoPageState extends State<HitDemoPage> {
   int _iconTaps = 0;
   int _badgeTaps = 0;
   int _paintOnTopTaps = 0;
-  int _paintUnderTaps = 0;
   int _chipTaps = 0;
   int _richTextTaps = 0;
   int _listTaps = 0;
@@ -222,7 +221,7 @@ class _HitDemoPageState extends State<HitDemoPage> {
                     ),
                   ),
                   _DemoTile(
-                    title: 'Hit.defer',
+                    title: 'HitDefer',
                     body: _useHit
                         ? 'Badge hangs outside the card. '
                               'HitScope still delivers the tap.'
@@ -232,17 +231,17 @@ class _HitDemoPageState extends State<HitDemoPage> {
                     child: _OverflowBadge(
                       useHit: _useHit,
                       showHitArea: _showHitArea,
-                      paint: _DeferPaint.none,
+                      paint: HitDeferPaint.none,
                       onTap: () => setState(() => _badgeTaps++),
                     ),
                   ),
                   _DemoTile(
-                    title: 'Hit.defer · paintOnTop',
+                    title: 'HitDefer · paint: onTop',
                     body: _useHit
                         ? 'A cover sits above the badge in the tree. '
-                              'paintOnTop still draws the badge last.'
+                              'HitDeferPaint.onTop still draws the badge last.'
                         : 'A cover sits above the badge in the tree. '
-                              'Without paintOnTop the badge stays buried.',
+                              'Without onTop paint the badge stays buried.',
                     footer: '$_paintOnTopTaps taps',
                     // HitScope wraps the whole tile so the hanging badge
                     // stays inside scope layout (tile padding absorbs -12).
@@ -250,24 +249,8 @@ class _HitDemoPageState extends State<HitDemoPage> {
                     child: _OverflowBadge(
                       useHit: _useHit,
                       showHitArea: _showHitArea,
-                      paint: _DeferPaint.onTop,
+                      paint: HitDeferPaint.onTop,
                       onTap: () => setState(() => _paintOnTopTaps++),
-                      cover: true,
-                    ),
-                  ),
-                  _DemoTile(
-                    title: 'Hit.before · paintUnder',
-                    body: _useHit
-                        ? 'Badge is last in the stack but Hit.before '
-                              'paints it under the whole scope.'
-                        : 'Badge is last in the stack — it paints on top.',
-                    footer: '$_paintUnderTaps taps',
-                    scope: true,
-                    child: _OverflowBadge(
-                      useHit: _useHit,
-                      showHitArea: _showHitArea,
-                      paint: _DeferPaint.under,
-                      onTap: () => setState(() => _paintUnderTaps++),
                       cover: true,
                     ),
                   ),
@@ -768,7 +751,7 @@ class _SettingsMenuButton extends StatelessWidget {
         CupertinoMenuItem(
           subtitle: Text(
             useHit
-                ? 'HitLayer / Hit.defer active'
+                ? 'HitLayer / HitDefer active'
                 : 'Plain Flutter — no hit package',
           ),
           trailing: useHit
@@ -861,8 +844,6 @@ class _DemoTile extends StatelessWidget {
   }
 }
 
-enum _DeferPaint { none, onTop, under }
-
 class _OverflowBadge extends StatelessWidget {
   const _OverflowBadge({
     required this.useHit,
@@ -874,7 +855,7 @@ class _OverflowBadge extends StatelessWidget {
 
   final bool useHit;
   final bool showHitArea;
-  final _DeferPaint paint;
+  final HitDeferPaint paint;
   final VoidCallback onTap;
   final bool cover;
 
@@ -913,16 +894,12 @@ class _OverflowBadge extends StatelessWidget {
 
     if (useHit) {
       badge = switch (paint) {
-        _DeferPaint.onTop => Hit.defer(
-          paintOnTop: true,
+        HitDeferPaint.onTop => HitDefer(
+          paint: HitDeferPaint.onTop,
           behavior: HitTestBehavior.opaque,
           child: badge,
         ),
-        _DeferPaint.under => Hit.before(
-          behavior: HitTestBehavior.opaque,
-          child: badge,
-        ),
-        _DeferPaint.none => Hit.defer(
+        HitDeferPaint.none => HitDefer(
           behavior: HitTestBehavior.opaque,
           child: badge,
         ),
@@ -942,10 +919,10 @@ class _OverflowBadge extends StatelessWidget {
                   top: Radius.circular(12),
                 ),
               ),
-              child: Center(
+              child: const Center(
                 child: Text(
-                  paint == _DeferPaint.under ? 'over badge' : 'cover',
-                  style: const TextStyle(
+                  'cover',
+                  style: TextStyle(
                     color: CupertinoColors.white,
                     fontSize: 12,
                   ),
@@ -955,8 +932,7 @@ class _OverflowBadge extends StatelessWidget {
           )
         : null;
 
-    // paintUnder: badge last in the tree so without Hit.before it paints on top.
-    // paintOnTop: badge first so without paintOnTop the cover buries it.
+    // Badge first so without HitDeferPaint.onTop the cover buries it.
     final List<Widget> stackChildren = [
       Positioned.fill(
         child: DecoratedBox(
@@ -969,23 +945,12 @@ class _OverflowBadge extends StatelessWidget {
           ),
           child: Padding(
             padding: const EdgeInsets.all(14),
-            child: Text(
-              cover
-                  ? (paint == _DeferPaint.under
-                        ? 'Foreground card'
-                        : 'Covered card')
-                  : 'Card',
-            ),
+            child: Text(cover ? 'Covered card' : 'Card'),
           ),
         ),
       ),
-      if (paint == _DeferPaint.under) ...[
-        ?coverLayer,
-        Positioned(right: -12, top: -12, child: badge),
-      ] else ...[
-        Positioned(right: -12, top: -12, child: badge),
-        ?coverLayer,
-      ],
+      Positioned(right: -12, top: -12, child: badge),
+      ?coverLayer,
     ];
 
     return SizedBox(
@@ -1780,7 +1745,7 @@ class _ClipScopeDemo extends StatelessWidget {
           Positioned(
             right: -14,
             top: -14,
-            child: Hit.defer(
+            child: HitDefer(
               behavior: HitTestBehavior.opaque,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
