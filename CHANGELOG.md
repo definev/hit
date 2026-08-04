@@ -1,3 +1,15 @@
+## 1.0.0
+
+Stable release. Public API is the surface exported by `package:hit/hit.dart`:
+
+- `HitLayer`, `HitScope` / `HitScopeState`
+- `Hit.defer` / `Hit.before`
+- `HitLink`, `HitDeferRegistration`
+
+No breaking changes from 0.3.2. Docs and example now cover common `HitScope`
+mistakes (scope too small, clip above scope, missing scope) and scrubbers that
+do not fight the page scroll view on small screens.
+
 ## 0.3.2
 
 - Fix deferred targets staying on a stale registry when `HitScope.link` changes

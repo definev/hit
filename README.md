@@ -26,7 +26,7 @@ Flutter layout and hit-testing share the same box. Growing padding to enlarge a 
 
 ```yaml
 dependencies:
-  hit: ^0.3.2
+  hit: ^1.0.0
 ```
 
 ```dart
