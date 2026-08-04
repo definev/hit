@@ -9,6 +9,9 @@ topics:
   - widgets
   - gestures
   - hit-testing
+screenshots:
+  - description: Package banner — expand touch targets without growing layout.
+    path: assets/logo.png
 
 environment:
   sdk: ^3.0.0

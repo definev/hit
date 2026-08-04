@@ -1,5 +1,9 @@
 # hit
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/definev/hit/main/assets/banner.png" alt="hit — expand touch targets without growing layout" width="420" />
+</p>
+
 Separate **paint/layout size** from **hit size** in Flutter, and deliver taps that fall outside a widget’s layout box.
 
 Use it when a control must stay visually small (icon, grip, 1px edge, chip ×) but still meet a comfortable / WCAG touch target without pushing neighbors.
