@@ -157,217 +157,218 @@ class _HitDemoPageState extends State<HitDemoPage> {
               ),
             ),
             SliverHitScope(
-              sliver:
-            SliverMainAxisGroup(
-              slivers: [
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                  sliver: SliverToBoxAdapter(
-                    child: Text(
-                      'Paint/layout size and hit size are separate. '
-                      'Open Settings for Use hit / Show hit areas. '
-                      'Slivers tab demos SliverHitScope with list and grid.',
-                      style: text.textStyle.copyWith(
-                        color: CupertinoColors.secondaryLabel.resolveFrom(
-                          context,
+              debugLabel: 'sliver-hit-scope',
+              sliver: SliverMainAxisGroup(
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                    sliver: SliverToBoxAdapter(
+                      child: Text(
+                        'Paint/layout size and hit size are separate. '
+                        'Open Settings for Use hit / Show hit areas. '
+                        'Slivers tab demos SliverHitScope with list and grid.',
+                        style: text.textStyle.copyWith(
+                          color: CupertinoColors.secondaryLabel.resolveFrom(
+                            context,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  sliver: SliverGrid(
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 320,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: 0.85,
-                        ),
-                    delegate: SliverChildListDelegate([
-                      _DemoTile(
-                        title: 'HitLayer',
-                        body: _useHit
-                            ? 'Icon lays out at 24x24. Hit target is 48x48 — '
-                                  'neighbors stay put.'
-                            : 'Same 24x24 icon. Tap target equals paint size — '
-                                  'corners outside the glyph miss.',
-                        footer: '$_iconTaps taps',
-                        child: ColoredBox(
-                          color: CupertinoColors.secondarySystemBackground
-                              .resolveFrom(context),
-                          child: Row(
-                            children: [
-                              if (_useHit)
-                                HitLayer(
-                                  debugLabel: 'new-item', 
-                                  alignment: Alignment.center,
-                                  behavior: HitTestBehavior.deferToChild,
-                                  hitChild: GestureDetector(
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    sliver: SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 320,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 0.85,
+                          ),
+                      delegate: SliverChildListDelegate([
+                        _DemoTile(
+                          title: 'HitLayer',
+                          body: _useHit
+                              ? 'Icon lays out at 24x24. Hit target is 48x48 — '
+                                    'neighbors stay put.'
+                              : 'Same 24x24 icon. Tap target equals paint size — '
+                                    'corners outside the glyph miss.',
+                          footer: '$_iconTaps taps',
+                          child: ColoredBox(
+                            color: CupertinoColors.secondarySystemBackground
+                                .resolveFrom(context),
+                            child: Row(
+                              children: [
+                                if (_useHit)
+                                  HitLayer(
+                                    debugLabel: 'new-item',
+                                    alignment: Alignment.center,
+                                    behavior: HitTestBehavior.deferToChild,
+                                    hitChild: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () => setState(() => _iconTaps++),
+                                      child: SizedBox(
+                                        width: 48,
+                                        height: 48,
+                                        child: _showHitArea
+                                            ? const _HitGhost()
+                                            : null,
+                                      ),
+                                    ),
+                                    paintChild: const IgnorePointer(
+                                      child: Icon(CupertinoIcons.add, size: 24),
+                                    ),
+                                  )
+                                else
+                                  GestureDetector(
                                     behavior: HitTestBehavior.opaque,
                                     onTap: () => setState(() => _iconTaps++),
                                     child: SizedBox(
-                                      width: 48,
-                                      height: 48,
-                                      child: _showHitArea
-                                          ? const _HitGhost()
-                                          : null,
-                                    ),
-                                  ),
-                                  paintChild: const IgnorePointer(
-                                    child: Icon(CupertinoIcons.add, size: 24),
-                                  ),
-                                )
-                              else
-                                GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () => setState(() => _iconTaps++),
-                                  child: SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        const Icon(
-                                          CupertinoIcons.add,
-                                          size: 24,
-                                        ),
-                                        if (_showHitArea)
-                                          const IgnorePointer(
-                                            child: _HitGhost(),
+                                      width: 24,
+                                      height: 24,
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          const Icon(
+                                            CupertinoIcons.add,
+                                            size: 24,
                                           ),
-                                      ],
+                                          if (_showHitArea)
+                                            const IgnorePointer(
+                                              child: _HitGhost(),
+                                            ),
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                ),
-                              const SizedBox(width: 8),
-                              const Expanded(child: Text('New item')),
-                            ],
+                                const SizedBox(width: 8),
+                                const Expanded(child: Text('New item')),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      _DemoTile(
-                        title: 'HitDefer',
-                        body: _useHit
-                            ? 'Badge hangs outside the card. '
-                                  'HitScope still delivers the tap.'
-                            : 'Badge hangs outside the card. '
-                                  'Taps outside the parent bounds miss.',
-                        footer: '$_badgeTaps taps',
-                        child: _OverflowBadge(
-                          useHit: _useHit,
-                          showHitArea: _showHitArea,
-                          debugLabel: 'card-hit-defer',
-                          paint: HitDeferPaint.none,
-                          onTap: () => setState(() => _badgeTaps++),
+                        _DemoTile(
+                          title: 'HitDefer',
+                          body: _useHit
+                              ? 'Badge hangs outside the card. '
+                                    'HitScope still delivers the tap.'
+                              : 'Badge hangs outside the card. '
+                                    'Taps outside the parent bounds miss.',
+                          footer: '$_badgeTaps taps',
+                          child: _OverflowBadge(
+                            useHit: _useHit,
+                            showHitArea: _showHitArea,
+                            debugLabel: 'card-hit-defer',
+                            paint: HitDeferPaint.none,
+                            onTap: () => setState(() => _badgeTaps++),
+                          ),
                         ),
-                      ),
-                      _DemoTile(
-                        title: 'HitDefer · paint: onTop',
-                        body: _useHit
-                            ? 'A cover sits above the badge in the tree. '
-                                  'HitDeferPaint.onTop still draws the badge last.'
-                            : 'A cover sits above the badge in the tree. '
-                                  'Without onTop paint the badge stays buried.',
-                        footer: '$_paintOnTopTaps taps',
-                        // HitScope wraps the whole tile so the hanging badge
-                        // stays inside scope layout (tile padding absorbs -12).
-                        scope: true,
-                        child: _OverflowBadge(
-                          useHit: _useHit,
-                          showHitArea: _showHitArea,
-                          debugLabel: 'card-hit-defer-top',
-                          paint: HitDeferPaint.onTop,
-                          onTap: () => setState(() => _paintOnTopTaps++),
-                          cover: true,
+                        _DemoTile(
+                          title: 'HitDefer · paint: onTop',
+                          body: _useHit
+                              ? 'A cover sits above the badge in the tree. '
+                                    'HitDeferPaint.onTop still draws the badge last.'
+                              : 'A cover sits above the badge in the tree. '
+                                    'Without onTop paint the badge stays buried.',
+                          footer: '$_paintOnTopTaps taps',
+                          // HitScope wraps the whole tile so the hanging badge
+                          // stays inside scope layout (tile padding absorbs -12).
+                          scope: true,
+                          child: _OverflowBadge(
+                            useHit: _useHit,
+                            showHitArea: _showHitArea,
+                            debugLabel: 'card-hit-defer-top',
+                            paint: HitDeferPaint.onTop,
+                            onTap: () => setState(() => _paintOnTopTaps++),
+                            cover: true,
+                          ),
                         ),
-                      ),
-                      _DemoTile(
-                        title: 'Chip dismiss',
-                        body: _useHit
-                            ? 'Dense chip stays tight; x hit expands to 44x44.'
-                            : 'x is only as big as the glyph — easy to miss.',
-                        footer: '$_chipTaps dismisses',
-                        child: _ChipDismiss(
-                          useHit: _useHit,
-                          showHitArea: _showHitArea,
-                          onDismiss: () => setState(() => _chipTaps++),
+                        _DemoTile(
+                          title: 'Chip dismiss',
+                          body: _useHit
+                              ? 'Dense chip stays tight; x hit expands to 44x44.'
+                              : 'x is only as big as the glyph — easy to miss.',
+                          footer: '$_chipTaps dismisses',
+                          child: _ChipDismiss(
+                            useHit: _useHit,
+                            showHitArea: _showHitArea,
+                            onDismiss: () => setState(() => _chipTaps++),
+                          ),
                         ),
-                      ),
-                      _DemoTile(
-                        title: 'Text.rich · WidgetSpan',
-                        body: _useHit
-                            ? 'Inline @mention lays out tight in Text.rich; '
-                                  'hit expands past the placeholder.'
-                            : 'Inline @mention hit equals paint — corners miss.',
-                        footer: '$_richTextTaps taps',
-                        child: _RichTextHit(
-                          useHit: _useHit,
-                          showHitArea: _showHitArea,
-                          onTap: () => setState(() => _richTextTaps++),
+                        _DemoTile(
+                          title: 'Text.rich · WidgetSpan',
+                          body: _useHit
+                              ? 'Inline @mention lays out tight in Text.rich; '
+                                    'hit expands past the placeholder.'
+                              : 'Inline @mention hit equals paint — corners miss.',
+                          footer: '$_richTextTaps taps',
+                          child: _RichTextHit(
+                            useHit: _useHit,
+                            showHitArea: _showHitArea,
+                            onTap: () => setState(() => _richTextTaps++),
+                          ),
                         ),
-                      ),
-                      _DemoTile(
-                        title: 'Resize handle',
-                        body: _useHit
-                            ? 'Drag the tiny grip — hit expands outside the panel.'
-                            : 'Grip hit equals paint — hard to grab and drag.',
-                        footer:
-                            '${_panelSize.width.round()}x${_panelSize.height.round()}',
-                        child: _ResizeHandle(
-                          useHit: _useHit,
-                          showHitArea: _showHitArea,
-                          size: _panelSize,
-                          onDraggingChanged: _setScrollLocked,
-                          onSizeChanged: (s) => setState(() => _panelSize = s),
+                        _DemoTile(
+                          title: 'Resize handle',
+                          body: _useHit
+                              ? 'Drag the tiny grip — hit expands outside the panel.'
+                              : 'Grip hit equals paint — hard to grab and drag.',
+                          footer:
+                              '${_panelSize.width.round()}x${_panelSize.height.round()}',
+                          child: _ResizeHandle(
+                            useHit: _useHit,
+                            showHitArea: _showHitArea,
+                            size: _panelSize,
+                            onDraggingChanged: _setScrollLocked,
+                            onSizeChanged: (s) =>
+                                setState(() => _panelSize = s),
+                          ),
                         ),
-                      ),
-                      _DemoTile(
-                        title: 'Window edge',
-                        body: _useHit
-                            ? 'Drag the 1px edge — thick hit strip expands outside.'
-                            : 'Only the 1px line receives drag hits.',
-                        footer: '${_windowWidth.round()} wide',
-                        child: _WindowEdge(
-                          useHit: _useHit,
-                          showHitArea: _showHitArea,
-                          width: _windowWidth,
-                          onDraggingChanged: _setScrollLocked,
-                          onWidthChanged: (w) =>
-                              setState(() => _windowWidth = w),
+                        _DemoTile(
+                          title: 'Window edge',
+                          body: _useHit
+                              ? 'Drag the 1px edge — thick hit strip expands outside.'
+                              : 'Only the 1px line receives drag hits.',
+                          footer: '${_windowWidth.round()} wide',
+                          child: _WindowEdge(
+                            useHit: _useHit,
+                            showHitArea: _showHitArea,
+                            width: _windowWidth,
+                            onDraggingChanged: _setScrollLocked,
+                            onWidthChanged: (w) =>
+                                setState(() => _windowWidth = w),
+                          ),
                         ),
-                      ),
-                      _DemoTile(
-                        title: 'List row action',
-                        body: _useHit
-                            ? 'Trailing icon sits flush; hit expands outward.'
-                            : 'Trailing icon hit equals glyph size.',
-                        footer: '$_listTaps actions',
-                        child: _ListAction(
-                          useHit: _useHit,
-                          showHitArea: _showHitArea,
-                          onTap: () => setState(() => _listTaps++),
+                        _DemoTile(
+                          title: 'List row action',
+                          body: _useHit
+                              ? 'Trailing icon sits flush; hit expands outward.'
+                              : 'Trailing icon hit equals glyph size.',
+                          footer: '$_listTaps actions',
+                          child: _ListAction(
+                            useHit: _useHit,
+                            showHitArea: _showHitArea,
+                            onTap: () => setState(() => _listTaps++),
+                          ),
                         ),
-                      ),
-                      _DemoTile(
-                        title: 'Slider thumb',
-                        body: _useHit
-                            ? 'Small thumb for polish; oversized hit for scrubbing.'
-                            : 'Thumb hit equals paint — scrubbing is fiddly.',
-                        footer: '${(_sliderValue * 100).round()}%',
-                        child: _SliderThumb(
-                          useHit: _useHit,
-                          showHitArea: _showHitArea,
-                          value: _sliderValue,
-                          onDraggingChanged: _setScrollLocked,
-                          onChanged: (v) => setState(() => _sliderValue = v),
+                        _DemoTile(
+                          title: 'Slider thumb',
+                          body: _useHit
+                              ? 'Small thumb for polish; oversized hit for scrubbing.'
+                              : 'Thumb hit equals paint — scrubbing is fiddly.',
+                          footer: '${(_sliderValue * 100).round()}%',
+                          child: _SliderThumb(
+                            useHit: _useHit,
+                            showHitArea: _showHitArea,
+                            value: _sliderValue,
+                            onDraggingChanged: _setScrollLocked,
+                            onChanged: (v) => setState(() => _sliderValue = v),
+                          ),
                         ),
-                      ),
-                    ]),
+                      ]),
+                    ),
                   ),
-                ),
-              ],
+                ],
               ),
             ),
             SliverPadding(
