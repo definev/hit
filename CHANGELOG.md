@@ -1,5 +1,8 @@
 ## 1.2.4
 
+- Shrink the published DevTools extension assets (~43 MB → ~5.5 MB on disk,
+  ~1 MB compressed archive): tree-shake Material icons and omit local
+  CanvasKit (loaded from the Flutter CDN at runtime). See `tool/build_devtools.sh`.
 - Add **Probe** mode to the hit DevTools extension: tap the connected app to
   list every hit area under that point (`Hit.probed`) with diagnostic notes
   for misses. Mutually exclusive with Select; reuses cancelled pointer

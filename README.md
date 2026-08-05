@@ -347,11 +347,14 @@ HitLayer(
 ```
 
 Rebuild the embedded web assets after changing the
-extension UI:
+extension UI (run before `pub publish`):
 
 ```bash
 ./tool/build_devtools.sh
 ```
+
+That script tree-shakes icons and drops unused local CanvasKit so the
+published archive stays small (~1 MB compressed).
 
 See [DevTools extensions](https://docs.flutter.dev/tools/devtools/extensions)
 and [`devtools_extensions`](https://pub.dev/packages/devtools_extensions).
