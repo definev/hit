@@ -1,3 +1,13 @@
+## 1.2.3
+
+- Harden DevTools / debug paths for profile and release: `kDebugMode` guards
+  on service-extension registration and snapshot/probe APIs; assert-strip
+  DevTools init and deferred debug paint from creation/paint hot paths; lazy
+  debug-paint signal so release builds allocate no debug notifier.
+- Remove scroll-forced debug repaint listeners from `HitScope` /
+  `SliverHitScope`; deferred overlays track scroll via `LayerLink`
+  Leader/Follower only.
+
 ## 1.2.2
 
 - Reorganize README for a beginner-first path: install → quick start →
@@ -13,7 +23,7 @@
   `LeaderLayer` / `FollowerLayer` (`HitDeferRegistration.hitDebugLeaderLink`),
   matching `HitDeferPaint.onTop` paint tracking.
 - Debug paint / DevTools paths are assert-gated: release and profile builds
-  never enable overlays, debug compositing, or scroll debug listeners.
+  never enable overlays or debug compositing.
 - Add a **DevTools extension** (`extension/devtools`) with:
   - remote toggle for hit-area overlays and **Select** mode
   - hierarchical **Hit Scope Tree** (`TreeView`) of scopes and targets

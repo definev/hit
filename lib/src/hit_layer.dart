@@ -78,7 +78,10 @@ class HitLayer extends MultiChildRenderObjectWidget {
 
   @override
   RenderObject createRenderObject(BuildContext context) {
-    ensureHitDevToolsInitialized();
+    assert(() {
+      ensureHitDevToolsInitialized();
+      return true;
+    }());
     return RenderHitLayer(
       alignment: alignment,
       behavior: behavior,

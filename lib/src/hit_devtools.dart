@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
@@ -46,11 +47,26 @@ const String hitSelectedEventKind = 'Hit.selected';
 bool _hitDevToolsInitialized = false;
 bool _hitSelectRouteInstalled = false;
 
+const Map<String, Object?> _emptyHitDevToolsSnapshot = <String, Object?>{
+  'debugPaintHitAreas': false,
+  'hitDebugPaintingEnabled': false,
+  'selectMode': false,
+  'highlightId': null,
+  'layers': <Map<String, Object?>>[],
+  'defers': <Map<String, Object?>>[],
+  'scopes': <Map<String, Object?>>[],
+  'tree': <Map<String, Object?>>[],
+};
+
 /// Registers VM service extensions used by the hit DevTools tab.
 ///
-/// Safe to call multiple times. No-op in release builds. Invoked automatically
-/// when a [HitScope], [HitLayer], or [HitDefer] is created in debug mode.
+/// Safe to call multiple times. No-op in profile / release ([kDebugMode] is
+/// false). Invoked automatically when a [HitScope], [HitLayer], or [HitDefer]
+/// is created in debug mode.
 void ensureHitDevToolsInitialized() {
+  if (!kDebugMode) {
+    return;
+  }
   assert(() {
     if (_hitDevToolsInitialized) {
       return true;
@@ -63,6 +79,9 @@ void ensureHitDevToolsInitialized() {
 }
 
 void _ensureHitDebugSelectInstalled() {
+  if (!kDebugMode) {
+    return;
+  }
   assert(() {
     if (_hitSelectRouteInstalled) {
       return true;
@@ -101,6 +120,11 @@ void _onGlobalSelectPointer(PointerEvent event) {
 }
 
 void _registerExtensions() {
+  // Belt-and-suspenders: never register service extensions outside debug,
+  // even if this private helper is somehow reached.
+  if (!kDebugMode) {
+    return;
+  }
   developer.registerExtension(
     HitDevToolsMethods.getDebugPaint,
     (String method, Map<String, String> params) async {
@@ -197,8 +221,13 @@ void postHitSelectedEvent(int? id) {
 }
 
 /// Finds the live [RenderObject] for a DevTools hit target [id], if any.
+///
+/// Returns `null` outside [kDebugMode] (profile / release).
 @visibleForTesting
 RenderObject? findHitRenderObjectById(int id) {
+  if (!kDebugMode) {
+    return null;
+  }
   RenderObject? found;
 
   void visit(RenderObject node) {
@@ -257,9 +286,12 @@ bool inspectHitTarget(int? id) {
 /// Picks the most specific HitLayer / HitDefer under [globalPosition].
 ///
 /// Prefer the smallest containing hit area (most specific target). Returns
-/// `null` when nothing is under the point.
+/// `null` when nothing is under the point, or outside [kDebugMode].
 @visibleForTesting
 int? selectHitTargetAt(Offset globalPosition) {
+  if (!kDebugMode) {
+    return null;
+  }
   final Map<String, Object?> snapshot = collectHitDevToolsSnapshot();
   int? bestId;
   var bestArea = double.infinity;
@@ -320,8 +352,14 @@ developer.ServiceExtensionResponse _invalid(String message) {
 int hitDebugIdOf(Object object) => identityHashCode(object);
 
 /// Collects hit-related render objects from the live tree.
+///
+/// Returns an empty snapshot outside [kDebugMode] so profile / release builds
+/// never walk the render tree for DevTools.
 @visibleForTesting
 Map<String, Object?> collectHitDevToolsSnapshot() {
+  if (!kDebugMode) {
+    return _emptyHitDevToolsSnapshot;
+  }
   final List<Map<String, Object?>> layers = <Map<String, Object?>>[];
   final List<Map<String, Object?>> defers = <Map<String, Object?>>[];
   final List<Map<String, Object?>> scopes = <Map<String, Object?>>[];
@@ -705,8 +743,18 @@ String _debugRef(String? label, int id) {
 }
 
 /// Explains what would happen for a pointer at [globalPosition].
+///
+/// Returns an empty probe result outside [kDebugMode].
 @visibleForTesting
 Map<String, Object?> probeHitAt(Offset globalPosition) {
+  if (!kDebugMode) {
+    return <String, Object?>{
+      'x': globalPosition.dx,
+      'y': globalPosition.dy,
+      'hits': const <Map<String, Object?>>[],
+      'notes': const <String>[],
+    };
+  }
   final Map<String, Object?> snapshot = collectHitDevToolsSnapshot();
   final List<Map<String, Object?>> hits = <Map<String, Object?>>[];
   final List<String> notes = <String>[];

@@ -34,14 +34,17 @@ set debugPaintHitAreas(bool value) {
       return true;
     }
     _debugPaintHitAreas = value;
-    _debugPaintHitAreasSignal.notify();
+    _hitDebugPaintSignal.notify();
     return true;
   }());
 }
 
 bool _debugPaintHitAreas = false;
 
-final _HitDebugSignal _debugPaintHitAreasSignal = _HitDebugSignal();
+_HitDebugSignal? _debugPaintHitAreasSignal;
+
+_HitDebugSignal get _hitDebugPaintSignal =>
+    _debugPaintHitAreasSignal ??= _HitDebugSignal();
 
 /// When non-null, the hit target with this [identityHashCode] is painted with
 /// a stronger highlight (used by the DevTools extension).
@@ -54,7 +57,7 @@ set debugHighlightHitTargetId(int? value) {
       return true;
     }
     _debugHighlightHitTargetId = value;
-    _debugPaintHitAreasSignal.notify();
+    _hitDebugPaintSignal.notify();
     return true;
   }());
 }
@@ -74,7 +77,7 @@ set debugHitSelectEnabled(bool value) {
       return true;
     }
     _debugHitSelectEnabled = value;
-    _debugPaintHitAreasSignal.notify();
+    _hitDebugPaintSignal.notify();
     return true;
   }());
 }
@@ -106,7 +109,7 @@ bool get hitDebugPaintingEnabled {
 /// Registers [listener] for [debugPaintHitAreas] changes.
 void addHitDebugPaintListener(VoidCallback listener) {
   assert(() {
-    _debugPaintHitAreasSignal.addListener(listener);
+    _hitDebugPaintSignal.addListener(listener);
     return true;
   }());
 }
@@ -114,7 +117,7 @@ void addHitDebugPaintListener(VoidCallback listener) {
 /// Removes a [addHitDebugPaintListener] registration.
 void removeHitDebugPaintListener(VoidCallback listener) {
   assert(() {
-    _debugPaintHitAreasSignal.removeListener(listener);
+    _debugPaintHitAreasSignal?.removeListener(listener);
     return true;
   }());
 }

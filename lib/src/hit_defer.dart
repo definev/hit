@@ -59,7 +59,10 @@ class HitDefer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    ensureHitDevToolsInitialized();
+    assert(() {
+      ensureHitDevToolsInitialized();
+      return true;
+    }());
     final HitLink resolvedLink = link ?? HitScope.of(context).link;
     return _HitDeferRenderObjectWidget(
       link: resolvedLink,

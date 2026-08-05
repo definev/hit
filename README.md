@@ -34,7 +34,7 @@ Deferred out-of-bounds hit testing is inspired by [`defer_pointer`](https://pub.
 
 ```yaml
 dependencies:
-  hit: ^1.2.2
+  hit: ^1.2.3
 ```
 
 ```dart
