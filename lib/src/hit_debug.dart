@@ -84,6 +84,27 @@ set debugHitSelectEnabled(bool value) {
 
 bool _debugHitSelectEnabled = false;
 
+/// When `true`, a pointer down probes hit areas for DevTools
+/// (posts `Hit.probed` with the full probe payload).
+///
+/// Debug builds only; the setter is a no-op when asserts are disabled.
+/// Mutually exclusive with [debugHitSelectEnabled] when toggled via
+/// DevTools service extensions. Taps are cancelled so the app does not
+/// also handle them.
+bool get debugHitProbeEnabled => _debugHitProbeEnabled;
+set debugHitProbeEnabled(bool value) {
+  assert(() {
+    if (_debugHitProbeEnabled == value) {
+      return true;
+    }
+    _debugHitProbeEnabled = value;
+    _hitDebugPaintSignal.notify();
+    return true;
+  }());
+}
+
+bool _debugHitProbeEnabled = false;
+
 /// Whether [target] should use the DevTools highlight style.
 bool isHitDebugHighlighted(Object target) =>
     _debugHighlightHitTargetId != null &&

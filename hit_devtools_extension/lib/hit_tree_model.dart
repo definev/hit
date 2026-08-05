@@ -129,6 +129,74 @@ TreeViewNode<HitNodeData>? _findNodeById(
   return null;
 }
 
+/// Case-insensitive match on label, kind, groupKind, debugLabel, or id.
+bool _nodeMatchesQuery(HitNodeData data, String query) {
+  final String q = query.trim().toLowerCase();
+  if (q.isEmpty) {
+    return true;
+  }
+  if (_nodePrimaryLabel(data).toLowerCase().contains(q)) {
+    return true;
+  }
+  if (data.kind.toLowerCase().contains(q)) {
+    return true;
+  }
+  final String? groupKind = data.groupKind;
+  if (groupKind != null && groupKind.toLowerCase().contains(q)) {
+    return true;
+  }
+  final Object? debugLabel = data.payload['debugLabel'];
+  if (debugLabel is String && debugLabel.toLowerCase().contains(q)) {
+    return true;
+  }
+  final int? id = data.id;
+  if (id != null) {
+    final String idDec = '$id';
+    final String idHex = id.toRadixString(16);
+    final String idRef = _idRef(id).toLowerCase();
+    final String bare = q.startsWith('#') ? q.substring(1) : q;
+    if (idDec.contains(q) ||
+        idHex.contains(bare) ||
+        idRef.contains(q) ||
+        _shortId(id).contains(bare)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Keeps matches and their ancestors; expands matching branches.
+List<TreeViewNode<HitNodeData>> _filterTree(
+  List<TreeViewNode<HitNodeData>> tree,
+  String query,
+) {
+  if (query.trim().isEmpty) {
+    return tree;
+  }
+
+  List<TreeViewNode<HitNodeData>> filterNodes(
+    List<TreeViewNode<HitNodeData>> nodes,
+  ) {
+    final List<TreeViewNode<HitNodeData>> out = <TreeViewNode<HitNodeData>>[];
+    for (final TreeViewNode<HitNodeData> node in nodes) {
+      final List<TreeViewNode<HitNodeData>> children =
+          filterNodes(node.children);
+      if (_nodeMatchesQuery(node.content, query) || children.isNotEmpty) {
+        out.add(
+          TreeViewNode<HitNodeData>(
+            node.content,
+            expanded: true,
+            children: children,
+          ),
+        );
+      }
+    }
+    return out;
+  }
+
+  return filterNodes(tree);
+}
+
 List<String> _warningsFor(HitNodeData? selected) {
   if (selected == null) {
     return const <String>[];
@@ -136,30 +204,18 @@ List<String> _warningsFor(HitNodeData? selected) {
   final Map<String, Object?> p = selected.payload;
   final List<String> out = <String>[];
   if (p['groupKind'] == 'outside_scope') {
-    out.add(
-      'These targets’ hit AABBs extend outside the HitScope layout box. '
-      'Taps may miss unless the pointer also enters the scope.',
-    );
+    out.add('Outside HitScope — taps may miss.');
   }
   if (p['outsideScope'] == true) {
-    out.add(
-      'This target extends outside its HitScope AABB — expand the scope, '
-      'reduce the hit size, or accept that edge taps may miss.',
-    );
+    out.add('Outside HitScope — taps may miss.');
   }
   final List warnings = (p['warnings'] as List?) ?? const [];
   for (final Object? w in warnings) {
     final String warning = '$w';
     if (warning == 'overflow_without_scope') {
-      out.add(
-        'Hit area overflows layout without a HitScope — wrap in HitScope '
-        'or pass an explicit HitLink so overflow regions stay tappable.',
-      );
+      out.add('Overflow without HitScope or HitLink.');
     } else if (warning.startsWith('target_outside_scope:')) {
-      out.add(
-        'Deferred target extends outside its HitScope AABB — taps may miss '
-        'if the pointer never enters the scope layout box.',
-      );
+      out.add('Deferred target outside HitScope — taps may miss.');
     } else if (warning.isNotEmpty) {
       out.add(warning);
     }

@@ -14,18 +14,26 @@ class _HitExtensionHomeState extends State<HitExtensionHome>
   Map<String, Object?>? _snapshot;
   bool _debugPaint = false;
   bool _selectMode = false;
+  bool _probeMode = false;
+  Map<String, Object?>? _probeResult;
   int? _highlightId;
   HitNodeData? _selected;
+  _SidePaneTab _sideTab = _SidePaneTab.details;
 
   final TreeViewController _treeController = TreeViewController();
   final ScrollController _treeVertical = ScrollController();
   final ScrollController _treeHorizontal = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
   List<TreeViewNode<HitNodeData>> _tree = <TreeViewNode<HitNodeData>>[];
+  List<TreeViewNode<HitNodeData>>? _filteredTree;
+  String _searchQuery = '';
 
   /// Quiet groups (Outside scope / Unscoped) the user has expanded — kept
   /// across snapshot refreshes so clicking a child does not collapse them.
   final Set<String> _openQuietGroups = <String>{};
   StreamSubscription<Event>? _extensionSub;
+
+  List<TreeViewNode<HitNodeData>> get _visibleTree => _filteredTree ?? _tree;
 
   /// Width of the tree pane in horizontal layout; null uses the default fraction.
   double? _treeWidth;
@@ -54,9 +62,31 @@ class _HitExtensionHomeState extends State<HitExtensionHome>
   @override
   void dispose() {
     _extensionSub?.cancel();
+    _searchController.dispose();
     _treeVertical.dispose();
     _treeHorizontal.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String query) {
+    setState(() {
+      _searchQuery = query;
+      _filteredTree = query.trim().isEmpty ? null : _filterTree(_tree, query);
+    });
+  }
+
+  void _reapplySearchFilter() {
+    _filteredTree =
+        _searchQuery.trim().isEmpty ? null : _filterTree(_tree, _searchQuery);
+  }
+
+  void _clearSearch() {
+    if (_searchQuery.isEmpty && _filteredTree == null) {
+      return;
+    }
+    _searchController.clear();
+    _searchQuery = '';
+    _filteredTree = null;
   }
 
   void _listenToExtensionEvents() {
@@ -66,6 +96,20 @@ class _HitExtensionHomeState extends State<HitExtensionHome>
       return;
     }
     _extensionSub = service.onExtensionEvent.listen((Event event) {
+      if (event.extensionKind == HitExt.probedEvent) {
+        final Map<String, Object?>? data = event.extensionData?.data;
+        if (!mounted || data == null) {
+          return;
+        }
+        setState(() {
+          _probeResult = _normalizeProbeResult(
+            Map<String, Object?>.from(data),
+          );
+          _sideTab = _SidePaneTab.probe;
+        });
+        unawaited(_refresh(quiet: true));
+        return;
+      }
       if (event.extensionKind != HitExt.selectedEvent) {
         return;
       }
@@ -76,6 +120,7 @@ class _HitExtensionHomeState extends State<HitExtensionHome>
       }
       setState(() {
         _highlightId = id;
+        _sideTab = _SidePaneTab.details;
       });
       _jumpToId(id);
       // Refresh so details stay current.
@@ -91,8 +136,15 @@ class _HitExtensionHomeState extends State<HitExtensionHome>
       setState(() {
         _snapshot = null;
         _tree = <TreeViewNode<HitNodeData>>[];
+        _filteredTree = null;
+        _searchQuery = '';
+        _searchController.clear();
         _selected = null;
-        _error = 'Connect a Flutter app that depends on package:hit.';
+        _probeResult = null;
+        _sideTab = _SidePaneTab.details;
+        _probeMode = false;
+        _selectMode = false;
+        _error = 'Connect an app that uses package:hit.';
       });
     }
   }
@@ -117,9 +169,11 @@ class _HitExtensionHomeState extends State<HitExtensionHome>
     try {
       final Response paint = await _call(HitExt.getDebugPaint);
       final Response select = await _call(HitExt.getSelectMode);
+      final Response probe = await _call(HitExt.getProbeMode);
       final Response snap = await _call(HitExt.getSnapshot);
       final Map<String, Object?> paintJson = _jsonMap(paint.json);
       final Map<String, Object?> selectJson = _jsonMap(select.json);
+      final Map<String, Object?> probeJson = _jsonMap(probe.json);
       final Map<String, Object?> snapJson = _jsonMap(snap.json);
       final int? highlightId = (snapJson['highlightId'] as num?)?.toInt();
       _captureQuietExpansion();
@@ -133,9 +187,11 @@ class _HitExtensionHomeState extends State<HitExtensionHome>
       setState(() {
         _debugPaint = paintJson['enabled'] == true;
         _selectMode = selectJson['enabled'] == true;
+        _probeMode = probeJson['enabled'] == true;
         _snapshot = snapJson;
         _highlightId = highlightId;
         _tree = tree;
+        _reapplySearchFilter();
         _loading = false;
         if (_selected != null) {
           _selected = _findDataById(tree, _selected!.id) ?? _selected;
@@ -158,8 +214,7 @@ class _HitExtensionHomeState extends State<HitExtensionHome>
       setState(() {
         _loading = false;
         if (!quiet) {
-          _error = 'Failed to talk to package:hit service extensions.\n'
-              'Is the app running in debug/profile with HitScope/HitLayer?\n\n$e';
+          _error = 'Can\'t reach package:hit (debug/profile?).\n$e';
         }
       });
     }
@@ -184,6 +239,11 @@ class _HitExtensionHomeState extends State<HitExtensionHome>
       final Map<String, Object?> json = _jsonMap(response.json);
       setState(() {
         _selectMode = json['enabled'] == true;
+        if (json.containsKey('probeMode')) {
+          _probeMode = json['probeMode'] == true;
+        } else if (enabled) {
+          _probeMode = false;
+        }
         if (json['debugPaint'] == true) {
           _debugPaint = true;
         }
@@ -192,6 +252,34 @@ class _HitExtensionHomeState extends State<HitExtensionHome>
     } catch (e) {
       setState(() => _error = '$e');
     }
+  }
+
+  Future<void> _setProbeMode(bool enabled) async {
+    try {
+      final Response response = await _call(
+        HitExt.setProbeMode,
+        args: {'enabled': '$enabled'},
+      );
+      final Map<String, Object?> json = _jsonMap(response.json);
+      setState(() {
+        _probeMode = json['enabled'] == true;
+        if (json.containsKey('selectMode')) {
+          _selectMode = json['selectMode'] == true;
+        } else if (enabled) {
+          _selectMode = false;
+        }
+        if (json['debugPaint'] == true) {
+          _debugPaint = true;
+        }
+      });
+      await _refresh(quiet: true);
+    } catch (e) {
+      setState(() => _error = '$e');
+    }
+  }
+
+  void _clearProbeResult() {
+    setState(() => _probeResult = null);
   }
 
   Future<void> _highlight(int? id) async {
@@ -222,10 +310,16 @@ class _HitExtensionHomeState extends State<HitExtensionHome>
   void _onNodeTap(TreeViewNode<HitNodeData> node) {
     final HitNodeData data = node.content;
     if (!data.isSelectable && data.id == null) {
-      setState(() => _selected = data);
+      setState(() {
+        _selected = data;
+        _sideTab = _SidePaneTab.details;
+      });
       return;
     }
-    setState(() => _selected = data);
+    setState(() {
+      _selected = data;
+      _sideTab = _SidePaneTab.details;
+    });
     unawaited(_selectById(data.id));
   }
 
@@ -246,7 +340,13 @@ class _HitExtensionHomeState extends State<HitExtensionHome>
     if (id == null || _tree.isEmpty) {
       return;
     }
-    final TreeViewNode<HitNodeData>? node = _findNodeById(_tree, id);
+    // External selection (app tap / probe) should not stay hidden by filter.
+    if (_searchQuery.trim().isNotEmpty &&
+        _findNodeById(_visibleTree, id) == null &&
+        _findNodeById(_tree, id) != null) {
+      _clearSearch();
+    }
+    final TreeViewNode<HitNodeData>? node = _findNodeById(_visibleTree, id);
     if (node == null) {
       return;
     }
@@ -359,27 +459,30 @@ class _HitExtensionHomeState extends State<HitExtensionHome>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               _ToolbarToggle(
-                                tooltip:
-                                    'Debug paint — show hit-area overlays in the '
-                                    'connected app',
+                                tooltip: 'Debug paint',
                                 icon: Icons.border_outer,
                                 value: _debugPaint,
                                 onChanged: _setDebugPaint,
                               ),
                               const SizedBox(width: denseSpacing),
                               _ToolbarToggle(
-                                tooltip:
-                                    'Select — tap a debug-painted hit area in '
-                                    'the app to jump here and open its call '
-                                    'site in the IDE',
+                                tooltip: 'Select in app',
                                 icon: Icons.near_me_outlined,
                                 value: _selectMode,
                                 activeColor: _highlightYellow,
                                 onChanged: _setSelectMode,
                               ),
                               const SizedBox(width: denseSpacing),
+                              _ToolbarToggle(
+                                tooltip: 'Probe point',
+                                icon: Icons.gps_fixed,
+                                value: _probeMode,
+                                activeColor: _selectionBlue,
+                                onChanged: _setProbeMode,
+                              ),
+                              const SizedBox(width: denseSpacing),
                               DevToolsTooltip(
-                                message: 'Refresh snapshot',
+                                message: 'Refresh',
                                 child: IconButton(
                                   onPressed: _loading ? null : () => _refresh(),
                                   icon: const Icon(Icons.refresh, size: 18),
@@ -389,31 +492,78 @@ class _HitExtensionHomeState extends State<HitExtensionHome>
                             ],
                           ),
                           child: _tree.isEmpty
-                              ? const _EmptyState(
-                                  'No HitScope / HitLayer found.\n'
-                                  'Open a screen that uses package:hit.',
-                                )
-                              : _HitScopeTree(
-                                  tree: _tree,
-                                  controller: _treeController,
-                                  verticalController: _treeVertical,
-                                  horizontalController: _treeHorizontal,
-                                  selected: _selected,
-                                  highlightId: _highlightId,
-                                  onNodeTap: _onNodeTap,
-                                  onNodeToggle: _onQuietGroupToggle,
+                              ? const _EmptyState('No HitScope or HitLayer.')
+                              : Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        denseSpacing,
+                                        densePadding,
+                                        denseSpacing,
+                                        densePadding,
+                                      ),
+                                      child: DevToolsClearableTextField(
+                                        controller: _searchController,
+                                        hintText: 'Filter',
+                                        prefixIcon: const Icon(
+                                          Icons.search,
+                                          size: defaultIconSize,
+                                        ),
+                                        onChanged: _onSearchChanged,
+                                      ),
+                                    ),
+                                    Divider(
+                                      height: 1,
+                                      color: colors.outlineVariant,
+                                    ),
+                                    Expanded(
+                                      child: _visibleTree.isEmpty
+                                          ? const _EmptyState('No matches.')
+                                          : _HitScopeTree(
+                                              tree: _visibleTree,
+                                              controller: _treeController,
+                                              verticalController: _treeVertical,
+                                              horizontalController:
+                                                  _treeHorizontal,
+                                              selected: _selected,
+                                              highlightId: _highlightId,
+                                              onNodeTap: _onNodeTap,
+                                              onNodeToggle: _onQuietGroupToggle,
+                                            ),
+                                    ),
+                                  ],
                                 ),
                         );
                         final Widget detailsPane = _Panel(
-                          title: 'DETAILS',
-                          child: _HitDetailsPanel(
-                            selected: _selected,
-                            tree: _tree,
-                            highlightId: _highlightId,
-                            onOpenId: (int id) {
-                              unawaited(_selectById(id));
+                          titleWidget: _SidePaneTabs(
+                            tab: _sideTab,
+                            hasProbe: _probeResult != null,
+                            onChanged: (_SidePaneTab next) {
+                              setState(() => _sideTab = next);
                             },
                           ),
+                          child: _sideTab == _SidePaneTab.probe
+                              ? (_probeResult == null
+                                  ? const _EmptyState(
+                                      'Probe a point in the app.',
+                                    )
+                                  : _HitProbePanel(
+                                      result: _probeResult!,
+                                      highlightId: _highlightId,
+                                      onOpenId: (int id) {
+                                        unawaited(_selectById(id));
+                                      },
+                                      onClear: _clearProbeResult,
+                                    ))
+                              : _HitDetailsPanel(
+                                  selected: _selected,
+                                  tree: _tree,
+                                  onOpenId: (int id) {
+                                    unawaited(_selectById(id));
+                                  },
+                                ),
                         );
 
                         if (vertical) {

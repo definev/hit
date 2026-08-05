@@ -673,11 +673,16 @@ class RenderHitScope extends RenderProxyBox with _HitScopeDeferredMixin {
     });
 
     if (opaqueHit) {
+      result.add(BoxHitTestEntry(this, position));
       return true;
     }
 
     final subtreeHit = child?.hitTest(result, position: position) ?? false;
-    return anyDeferredHit || subtreeHit;
+    if (anyDeferredHit || subtreeHit) {
+      result.add(BoxHitTestEntry(this, position));
+      return true;
+    }
+    return false;
   }
 
   @override

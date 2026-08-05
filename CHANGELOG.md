@@ -1,3 +1,24 @@
+## 1.2.4
+
+- Add **Probe** mode to the hit DevTools extension: tap the connected app to
+  list every hit area under that point (`Hit.probed`) with diagnostic notes
+  for misses. Mutually exclusive with Select; reuses cancelled pointer
+  intercept. Service extensions: `ext.hit.getProbeMode` /
+  `ext.hit.setProbeMode` (`debugHitProbeEnabled`).
+- Fix Select / highlight IDE jump for `HitScope`, `SliverHitScope`, and
+  `HitDefer`: inspect the public widget call site instead of the private
+  render-object wrapper (`_HitScopeRenderObjectWidget`, etc.).
+- Include `globalBounds` / target hit bounds for `SliverHitScope` in DevTools
+  snapshots so Probe / Select can detect sliver scopes (previously omitted
+  because they are not `RenderBox`).
+- Deduplicate Probe hits: a deferred `HitLayer` / `HitDefer` is listed once
+  (enriched with scope id/label) instead of both `layer` and `deferredTarget`.
+- Probe marks the Flutter hit-test **winner** (deepest hit-package node on
+  the real path), sorts path hits leaf→root to mirror nesting / opaque
+  deferred order, and labels AABB-only overlaps as `overlap only`.
+- `HitScope.hitTest` now adds itself to the hit-test path (like
+  `SliverHitScope`) so Probe can show delivering scopes as `in path`.
+
 ## 1.2.3
 
 - Harden DevTools / debug paths for profile and release: `kDebugMode` guards

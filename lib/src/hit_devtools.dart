@@ -29,7 +29,15 @@ abstract final class HitDevToolsMethods {
   static const String getSelectMode = '${prefix}getSelectMode';
 
   /// Sets [debugHitSelectEnabled]. Params: `enabled` = `"true"` / `"false"`.
+  /// Disables probe mode when enabling select.
   static const String setSelectMode = '${prefix}setSelectMode';
+
+  /// Returns `{ enabled: bool }` for [debugHitProbeEnabled].
+  static const String getProbeMode = '${prefix}getProbeMode';
+
+  /// Sets [debugHitProbeEnabled]. Params: `enabled` = `"true"` / `"false"`.
+  /// Disables select mode when enabling probe.
+  static const String setProbeMode = '${prefix}setProbeMode';
 
   /// Returns a JSON snapshot of hit layers, defers, and scopes.
   static const String getSnapshot = '${prefix}getSnapshot';
@@ -44,6 +52,9 @@ abstract final class HitDevToolsMethods {
 /// Extension event kind posted when a hit target is selected in the app.
 const String hitSelectedEventKind = 'Hit.selected';
 
+/// Extension event kind posted when a point is probed in the app.
+const String hitProbedEventKind = 'Hit.probed';
+
 bool _hitDevToolsInitialized = false;
 bool _hitSelectRouteInstalled = false;
 
@@ -51,6 +62,7 @@ const Map<String, Object?> _emptyHitDevToolsSnapshot = <String, Object?>{
   'debugPaintHitAreas': false,
   'hitDebugPaintingEnabled': false,
   'selectMode': false,
+  'probeMode': false,
   'highlightId': null,
   'layers': <Map<String, Object?>>[],
   'defers': <Map<String, Object?>>[],
@@ -95,7 +107,7 @@ void _ensureHitDebugSelectInstalled() {
 
 void _onGlobalSelectPointer(PointerEvent event) {
   assert(() {
-    if (!debugHitSelectEnabled) {
+    if (!debugHitSelectEnabled && !debugHitProbeEnabled) {
       return true;
     }
     if (event is! PointerDownEvent) {
@@ -104,6 +116,21 @@ void _onGlobalSelectPointer(PointerEvent event) {
     if (!hitDebugPaintingEnabled) {
       debugPaintHitAreas = true;
     }
+
+    final int pointer = event.pointer;
+    void cancelSoon() {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        GestureBinding.instance.cancelPointer(pointer);
+      });
+    }
+
+    if (debugHitProbeEnabled) {
+      final Map<String, Object?> result = probeHitAt(event.position);
+      postHitProbedEvent(result);
+      cancelSoon();
+      return true;
+    }
+
     final int? id = selectHitTargetAt(event.position);
     if (id == null) {
       return true;
@@ -111,10 +138,7 @@ void _onGlobalSelectPointer(PointerEvent event) {
     debugHighlightHitTargetId = id;
     postHitSelectedEvent(id);
     inspectHitTarget(id);
-    final int pointer = event.pointer;
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      GestureBinding.instance.cancelPointer(pointer);
-    });
+    cancelSoon();
     return true;
   }());
 }
@@ -161,9 +185,38 @@ void _registerExtensions() {
       debugHitSelectEnabled = raw == 'true';
       if (debugHitSelectEnabled) {
         debugPaintHitAreas = true;
+        debugHitProbeEnabled = false;
       }
       return _ok(<String, Object?>{
         'enabled': debugHitSelectEnabled,
+        'probeMode': debugHitProbeEnabled,
+        'debugPaint': debugPaintHitAreas,
+      });
+    },
+  );
+
+  developer.registerExtension(
+    HitDevToolsMethods.getProbeMode,
+    (String method, Map<String, String> params) async {
+      return _ok(<String, Object?>{'enabled': debugHitProbeEnabled});
+    },
+  );
+
+  developer.registerExtension(
+    HitDevToolsMethods.setProbeMode,
+    (String method, Map<String, String> params) async {
+      final String? raw = params['enabled'];
+      if (raw == null) {
+        return _invalid('Missing parameter: enabled');
+      }
+      debugHitProbeEnabled = raw == 'true';
+      if (debugHitProbeEnabled) {
+        debugPaintHitAreas = true;
+        debugHitSelectEnabled = false;
+      }
+      return _ok(<String, Object?>{
+        'enabled': debugHitProbeEnabled,
+        'selectMode': debugHitSelectEnabled,
         'debugPaint': debugPaintHitAreas,
       });
     },
@@ -220,6 +273,15 @@ void postHitSelectedEvent(int? id) {
   }());
 }
 
+/// Posts a VM extension event so DevTools can show a probe result list.
+@visibleForTesting
+void postHitProbedEvent(Map<String, Object?> result) {
+  assert(() {
+    developer.postEvent(hitProbedEventKind, result);
+    return true;
+  }());
+}
+
 /// Finds the live [RenderObject] for a DevTools hit target [id], if any.
 ///
 /// Returns `null` outside [kDebugMode] (profile / release).
@@ -257,8 +319,13 @@ RenderObject? findHitRenderObjectById(int id) {
 /// Selects [id] in Flutter's Widget Inspector so the IDE can jump to source.
 ///
 /// Uses [WidgetInspectorService.setSelection], which posts a `navigate`
-/// [ToolEvent] with the widget creation location (the `HitLayer` /
-/// `HitDefer` / `HitScope` call site) when creation tracking is enabled.
+/// [ToolEvent] with the widget creation location when creation tracking is
+/// enabled.
+///
+/// Walks from the render object's element up to the public API widget
+/// ([HitLayer], [HitDefer], [HitScope], or [SliverHitScope]) so the IDE
+/// opens the call site in user code — not a private render-object wrapper
+/// built inside [HitScopeState] / [HitDefer.build].
 ///
 /// Returns whether the inspector selection changed. No-op in release builds.
 @visibleForTesting
@@ -272,8 +339,7 @@ bool inspectHitTarget(int? id) {
     if (target == null) {
       return true;
     }
-    final Object? creator = target.debugCreator;
-    final Object inspectee = creator is DebugCreator ? creator.element : target;
+    final Object inspectee = _inspectableForHitTarget(target);
     // Posts ToolEvent navigate for IDE jump-to-source (same path as
     // Flutter's on-device Widget Inspector).
     // ignore: invalid_use_of_protected_member
@@ -281,6 +347,33 @@ bool inspectHitTarget(int? id) {
     return true;
   }());
   return didSelect;
+}
+
+/// Public hit widget element (or the render object if none is found).
+Object _inspectableForHitTarget(RenderObject target) {
+  final Object? creator = target.debugCreator;
+  if (creator is! DebugCreator) {
+    return target;
+  }
+  Element element = creator.element;
+  if (_isPublicHitWidget(element.widget)) {
+    return element;
+  }
+  element.visitAncestorElements((Element ancestor) {
+    if (_isPublicHitWidget(ancestor.widget)) {
+      element = ancestor;
+      return false;
+    }
+    return true;
+  });
+  return element;
+}
+
+bool _isPublicHitWidget(Widget widget) {
+  return widget is HitLayer ||
+      widget is HitDefer ||
+      widget is HitScope ||
+      widget is SliverHitScope;
 }
 
 /// Picks the most specific HitLayer / HitDefer under [globalPosition].
@@ -397,6 +490,7 @@ Map<String, Object?> collectHitDevToolsSnapshot() {
     'debugPaintHitAreas': debugPaintHitAreas,
     'hitDebugPaintingEnabled': hitDebugPaintingEnabled,
     'selectMode': debugHitSelectEnabled,
+    'probeMode': debugHitProbeEnabled,
     'highlightId': debugHighlightHitTargetId,
     'layers': layers,
     'defers': defers,
@@ -538,7 +632,7 @@ List<Map<String, Object?>> _buildHitTree({
         'kind': 'group',
         'groupKind': 'unscoped',
         'scopeId': 'root',
-        'label': 'Unscoped targets (${orphans.length})',
+        'label': 'Unscoped (${orphans.length})',
         'children': orphans,
       },
   ];
@@ -700,11 +794,31 @@ Map<String, Object?> _describeHitScope(RenderHitScope scope) {
 }
 
 Map<String, Object?> _describeSliverHitScope(RenderSliverHitScope scope) {
+  final Rect? localBounds = _sliverHitLocalBounds(scope);
+  final Rect? global =
+      localBounds == null ? null : _globalRectOf(scope, localBounds);
   final List<Map<String, Object?>> targets = <Map<String, Object?>>[];
+  final List<String> warnings = <String>[];
   scope.link.forEach((HitDeferRegistration target) {
+    final Rect local = target.deferredHitBounds;
+    final Matrix4 transform = target.hitTestBox.getTransformTo(scope);
+    final Rect inScope = MatrixUtils.transformRect(transform, local);
+    final Rect? globalHit = _globalRectOf(scope, inScope);
+    final bool outside = localBounds != null &&
+        (inScope.left < 0 ||
+            inScope.top < 0 ||
+            inScope.right > localBounds.width ||
+            inScope.bottom > localBounds.height);
+    final String targetRef = _debugRef(target.debugLabel, hitDebugIdOf(target));
+    if (outside) {
+      warnings.add('target_outside_scope:$targetRef');
+    }
     targets.add(<String, Object?>{
       'id': hitDebugIdOf(target),
       'debugLabel': target.debugLabel,
+      'inScopeBounds': _rectJson(inScope),
+      'globalHitBounds': globalHit == null ? null : _rectJson(globalHit),
+      'outsideScope': outside,
       'behavior': target.hitBehavior.name,
       'deferPaint': target.deferPaint.name,
     });
@@ -714,12 +828,35 @@ Map<String, Object?> _describeSliverHitScope(RenderSliverHitScope scope) {
     'type': 'SliverHitScope',
     'debugLabel': scope.debugLabel,
     'parentScopeId': _parentScopeIdOf(scope),
+    'size': localBounds == null ? null : _sizeJson(localBounds.size),
+    'globalBounds': global == null ? null : _rectJson(global),
     'linkId': hitDebugIdOf(scope.link),
     'targetCount': targets.length,
     'targets': targets,
     'geometryPaintExtent': scope.geometry?.paintExtent,
     'geometryHitTestExtent': scope.geometry?.hitTestExtent,
-    'warnings': const <String>[],
+    'warnings': warnings,
+  };
+}
+
+/// Local paint-space AABB covering this sliver's hit-testable region.
+///
+/// Matches [RenderSliverHitScope.hitTest]: main axis `[0, hitTestExtent)` and
+/// cross axis `[0, crossAxisExtent)`, expressed in the sliver paint orientation
+/// used by [RenderSliverHitScope.paintOffsetForHit].
+Rect? _sliverHitLocalBounds(RenderSliverHitScope scope) {
+  final SliverGeometry? geometry = scope.geometry;
+  if (geometry == null || !scope.attached) {
+    return null;
+  }
+  final double main = geometry.hitTestExtent;
+  final double cross = scope.constraints.crossAxisExtent;
+  if (main <= 0 || cross <= 0) {
+    return null;
+  }
+  return switch (scope.constraints.axis) {
+    Axis.vertical => Rect.fromLTWH(0, 0, cross, main),
+    Axis.horizontal => Rect.fromLTWH(0, 0, main, cross),
   };
 }
 
@@ -751,6 +888,7 @@ Map<String, Object?> probeHitAt(Offset globalPosition) {
     return <String, Object?>{
       'x': globalPosition.dx,
       'y': globalPosition.dy,
+      'winnerId': null,
       'hits': const <Map<String, Object?>>[],
       'notes': const <String>[],
     };
@@ -800,15 +938,35 @@ Map<String, Object?> probeHitAt(Offset globalPosition) {
         }
         final Rect? rect = _rectFromJson(raw.cast<String, Object?>());
         if (rect != null && rect.contains(globalPosition)) {
-          hits.add(<String, Object?>{
-            'kind': 'deferredTarget',
-            'id': target['id'],
-            'debugLabel': target['debugLabel'],
-            'scopeId': scope['id'],
-            'scopeDebugLabel': scope['debugLabel'],
-            'outsideScope': target['outsideScope'],
-            'behavior': target['behavior'],
-          });
+          final int? targetId = (target['id'] as num?)?.toInt();
+          final int existingIndex = targetId == null
+              ? -1
+              : hits.indexWhere(
+                  (Map<String, Object?> h) =>
+                      (h['id'] as num?)?.toInt() == targetId,
+                );
+          if (existingIndex >= 0) {
+            // Same HitLayer / HitDefer already listed — enrich with scope
+            // registration instead of duplicating as deferredTarget.
+            final Map<String, Object?> existing = hits[existingIndex];
+            hits[existingIndex] = <String, Object?>{
+              ...existing,
+              'scopeId': scope['id'],
+              'scopeDebugLabel': scope['debugLabel'],
+              if (target['outsideScope'] != null)
+                'outsideScope': target['outsideScope'],
+            };
+          } else {
+            hits.add(<String, Object?>{
+              'kind': 'deferredTarget',
+              'id': target['id'],
+              'debugLabel': target['debugLabel'],
+              'scopeId': scope['id'],
+              'scopeDebugLabel': scope['debugLabel'],
+              'outsideScope': target['outsideScope'],
+              'behavior': target['behavior'],
+            });
+          }
           if (target['outsideScope'] == true) {
             final String targetRef = _debugRef(
               target['debugLabel'] as String?,
@@ -819,9 +977,7 @@ Map<String, Object?> probeHitAt(Offset globalPosition) {
               (scope['id'] as num).toInt(),
             );
             notes.add(
-              'Deferred target $targetRef contains the point but its '
-              'AABB extends outside scope $scopeRef — taps may miss if '
-              'the pointer never enters the scope layout box.',
+              '$targetRef outside scope $scopeRef — taps may miss.',
             );
           }
         }
@@ -829,19 +985,55 @@ Map<String, Object?> probeHitAt(Offset globalPosition) {
     }
   }
 
-  // Common miss diagnoses when nothing hittable claimed the point.
+  // Resolve the real hit-test winner (leaf→root path) so Probe matches
+  // nested / opaque deferred behavior instead of raw AABB overlap alone.
+  final List<int> pathIds = _hitPackageIdsAlongPath(globalPosition);
+  final int? winnerId = pathIds.isEmpty ? null : pathIds.first;
+  final Map<int, int> pathIndex = <int, int>{
+    for (var i = 0; i < pathIds.length; i++) pathIds[i]: i,
+  };
+
+  for (var i = 0; i < hits.length; i++) {
+    final Map<String, Object?> hit = hits[i];
+    final int? id = (hit['id'] as num?)?.toInt();
+    final bool inPath = id != null && pathIndex.containsKey(id);
+    hits[i] = <String, Object?>{
+      ...hit,
+      'inHitPath': inPath,
+      'winner': id != null && id == winnerId,
+    };
+  }
+
+  hits.sort((Map<String, Object?> a, Map<String, Object?> b) {
+    final int? idA = (a['id'] as num?)?.toInt();
+    final int? idB = (b['id'] as num?)?.toInt();
+    final bool pathA = a['inHitPath'] == true;
+    final bool pathB = b['inHitPath'] == true;
+    if (pathA && pathB) {
+      return (pathIndex[idA] ?? 0).compareTo(pathIndex[idB] ?? 0);
+    }
+    if (pathA != pathB) {
+      return pathA ? -1 : 1;
+    }
+    // AABB-only overlaps: more specific targets before large scopes.
+    final int kindA = _probeKindRank(a['kind'] as String?);
+    final int kindB = _probeKindRank(b['kind'] as String?);
+    if (kindA != kindB) {
+      return kindA.compareTo(kindB);
+    }
+    return _probeAreaOf(a).compareTo(_probeAreaOf(b));
+  });
+
   if (hits.isEmpty) {
-    notes.add(
-      'No HitLayer / HitDefer / HitScope hit area contains this point.',
-    );
+    notes.add('No hit area contains this point.');
   } else {
+    if (winnerId == null) {
+      notes.add('Overlaps found, but none on the hit-test path.');
+    }
     final bool onlyScope =
         hits.every((Map<String, Object?> h) => h['kind'] == 'scope');
     if (onlyScope) {
-      notes.add(
-        'Point is inside a HitScope layout box but not inside any registered '
-        'deferred hit area.',
-      );
+      notes.add('Inside HitScope, but no deferred hit area.');
     }
     for (final Map<String, Object?> h in hits) {
       final Object? warnings = h['warnings'];
@@ -850,10 +1042,7 @@ Map<String, Object?> probeHitAt(Offset globalPosition) {
           h['debugLabel'] as String?,
           (h['id'] as num).toInt(),
         );
-        notes.add(
-          'HitLayer $ref overflows without a HitScope/link — overflow '
-          'regions are not hittable.',
-        );
+        notes.add('$ref overflows without HitScope/link.');
       }
     }
   }
@@ -861,19 +1050,99 @@ Map<String, Object?> probeHitAt(Offset globalPosition) {
   return <String, Object?>{
     'x': globalPosition.dx,
     'y': globalPosition.dy,
+    'winnerId': winnerId,
     'hits': hits,
     'notes': notes,
   };
 }
 
-Rect? _globalRect(RenderObject box, Rect local) {
-  if (box is! RenderBox || !box.hasSize || !box.attached) {
+/// Hit-package render object ids along Flutter's hit-test path (leaf→root).
+///
+/// Walks each path entry up to the nearest [RenderHitLayer] / [RenderHitDefer]
+/// / [RenderHitScope] / [RenderSliverHitScope]. First id is the gesture
+/// "winner" among package nodes (deepest / front-most).
+List<int> _hitPackageIdsAlongPath(Offset globalPosition) {
+  final List<int> ids = <int>[];
+  final Set<int> seen = <int>{};
+  for (final RenderView view in RendererBinding.instance.renderViews) {
+    final HitTestResult result = HitTestResult();
+    RendererBinding.instance.hitTestInView(
+      result,
+      globalPosition,
+      view.flutterView.viewId,
+    );
+    for (final HitTestEntry entry in result.path) {
+      final HitTestTarget target = entry.target;
+      if (target is! RenderObject) {
+        continue;
+      }
+      RenderObject? node = target;
+      while (node != null) {
+        if (_isHitPackageRenderObject(node)) {
+          final int id = hitDebugIdOf(node);
+          if (seen.add(id)) {
+            ids.add(id);
+          }
+          break;
+        }
+        node = node.parent;
+      }
+    }
+    if (ids.isNotEmpty) {
+      break;
+    }
+  }
+  return ids;
+}
+
+bool _isHitPackageRenderObject(RenderObject node) {
+  return node is RenderHitLayer ||
+      node is RenderHitDefer ||
+      node is RenderHitScope ||
+      node is RenderSliverHitScope;
+}
+
+int _probeKindRank(String? kind) {
+  return switch (kind) {
+    'layer' || 'defer' || 'deferredTarget' => 0,
+    'scope' => 1,
+    _ => 2,
+  };
+}
+
+double _probeAreaOf(Map<String, Object?> item) {
+  final Rect? rect = _screenRectOf(item);
+  if (rect == null) {
+    return double.infinity;
+  }
+  return math.max(rect.width, 0) * math.max(rect.height, 0);
+}
+
+Rect? _globalRect(RenderObject box, Rect local) => _globalRectOf(box, local);
+
+/// Maps [local] through [object]'s transform to global coordinates.
+///
+/// Uses [RenderBox.localToGlobal] when possible; otherwise
+/// [RenderObject.getTransformTo] (needed for [RenderSliverHitScope]).
+Rect? _globalRectOf(RenderObject object, Rect local) {
+  if (!object.attached) {
     return null;
   }
+  if (object is RenderBox) {
+    if (!object.hasSize) {
+      return null;
+    }
+    try {
+      final Offset topLeft = object.localToGlobal(local.topLeft);
+      final Offset bottomRight = object.localToGlobal(local.bottomRight);
+      return Rect.fromPoints(topLeft, bottomRight);
+    } catch (_) {
+      return null;
+    }
+  }
   try {
-    final Offset topLeft = box.localToGlobal(local.topLeft);
-    final Offset bottomRight = box.localToGlobal(local.bottomRight);
-    return Rect.fromPoints(topLeft, bottomRight);
+    final Matrix4 transform = object.getTransformTo(null);
+    return MatrixUtils.transformRect(transform, local);
   } catch (_) {
     return null;
   }

@@ -10,6 +10,7 @@ void main() {
     debugPaintSizeEnabled = false;
     debugHighlightHitTargetId = null;
     debugHitSelectEnabled = false;
+    debugHitProbeEnabled = false;
     WidgetInspectorService.instance.selection.clear();
   });
 
@@ -227,6 +228,79 @@ void main() {
     );
   });
 
+  testWidgets('inspectHitTarget selects public HitScope not private wrapper', (
+    tester,
+  ) async {
+    ensureHitDevToolsInitialized();
+    WidgetInspectorService.instance.selection.clear();
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: HitScope(
+            debugLabel: 'inspect-scope',
+            child: SizedBox(width: 80, height: 80),
+          ),
+        ),
+      ),
+    );
+
+    final Map<String, Object?> snap = collectHitDevToolsSnapshot();
+    final Map<String, Object?> scope = (snap['scopes']! as List)
+        .whereType<Map>()
+        .map((Map raw) => raw.cast<String, Object?>())
+        .firstWhere(
+          (Map<String, Object?> s) => s['debugLabel'] == 'inspect-scope',
+        );
+    final int id = (scope['id'] as num).toInt();
+
+    expect(inspectHitTarget(id), isTrue);
+
+    final Element? selected =
+        WidgetInspectorService.instance.selection.currentElement;
+    expect(selected, isNotNull);
+    expect(selected!.widget, isA<HitScope>());
+    expect((selected.widget as HitScope).debugLabel, 'inspect-scope');
+    expect(selected.widget.runtimeType.toString(), 'HitScope');
+  });
+
+  testWidgets('inspectHitTarget selects public HitDefer not private wrapper', (
+    tester,
+  ) async {
+    ensureHitDevToolsInitialized();
+    WidgetInspectorService.instance.selection.clear();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: HitScope(
+            child: HitDefer(
+              debugLabel: 'inspect-defer',
+              child: const SizedBox(width: 40, height: 40),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final Map<String, Object?> snap = collectHitDevToolsSnapshot();
+    final Map<String, Object?> defer = (snap['defers']! as List)
+        .whereType<Map>()
+        .map((Map raw) => raw.cast<String, Object?>())
+        .firstWhere(
+          (Map<String, Object?> d) => d['debugLabel'] == 'inspect-defer',
+        );
+    final int id = (defer['id'] as num).toInt();
+
+    expect(inspectHitTarget(id), isTrue);
+
+    final Element? selected =
+        WidgetInspectorService.instance.selection.currentElement;
+    expect(selected, isNotNull);
+    expect(selected!.widget, isA<HitDefer>());
+    expect((selected.widget as HitDefer).debugLabel, 'inspect-defer');
+  });
+
   testWidgets('probe reports deferred hit inside expanded area',
       (tester) async {
     ensureHitDevToolsInitialized();
@@ -235,14 +309,19 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: HitScope(
+            debugLabel: 'probe-scope',
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Align(
                 alignment: Alignment.topLeft,
                 child: HitLayer(
+                  debugLabel: 'probe-layer',
                   alignment: Alignment.center,
-                  behavior: HitTestBehavior.deferToChild,
-                  hitChild: const SizedBox(width: 48, height: 48),
+                  behavior: HitTestBehavior.opaque,
+                  hitChild: Listener(
+                    behavior: HitTestBehavior.opaque,
+                    child: const SizedBox(width: 48, height: 48),
+                  ),
                   paintChild: const SizedBox(width: 24, height: 24),
                 ),
               ),
@@ -263,6 +342,37 @@ void main() {
     final Map<String, Object?> probe = probeHitAt(Offset(x, y));
     final hits = probe['hits']! as List<Object?>;
     expect(hits, isNotEmpty);
+
+    final List<int> ids = <int>[
+      for (final Object? h in hits)
+        if (h is Map && h['id'] != null) (h['id'] as num).toInt(),
+    ];
+    expect(ids.toSet().length, ids.length,
+        reason: 'probe must not list the '
+            'same target twice as layer and deferredTarget');
+
+    final Map<String, Object?> layerHit = hits
+        .whereType<Map>()
+        .map((Map raw) => raw.cast<String, Object?>())
+        .firstWhere((Map<String, Object?> h) => h['kind'] == 'layer');
+    expect(layerHit['deferred'], isTrue);
+    expect(layerHit['scopeId'], isNotNull);
+    expect(layerHit['winner'], isTrue);
+    expect(layerHit['inHitPath'], isTrue);
+    expect(probe['winnerId'], layerHit['id']);
+    expect(
+      (hits.first as Map)['winner'],
+      isTrue,
+      reason: 'winner should be sorted first (hit-path leaf→root order)',
+    );
+
+    // Nested path: deferred layer (winner) then the delivering HitScope.
+    final List<String> pathKinds = <String>[
+      for (final Object? h in hits)
+        if (h is Map && h['inHitPath'] == true) '${h['kind']}',
+    ];
+    expect(pathKinds.first, 'layer');
+    expect(pathKinds, contains('scope'));
   });
 
   testWidgets('probe notes empty space', (tester) async {
@@ -277,5 +387,95 @@ void main() {
     final Map<String, Object?> probe = probeHitAt(const Offset(-1000, -1000));
     expect(probe['hits'], isEmpty);
     expect((probe['notes'] as List), isNotEmpty);
+  });
+
+  testWidgets('snapshot includes probeMode; exclusive flag simulation',
+      (tester) async {
+    ensureHitDevToolsInitialized();
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: HitScope(child: SizedBox(width: 40, height: 40)),
+      ),
+    );
+
+    // Same mutual-exclusion rules as setProbeMode / setSelectMode.
+    debugHitProbeEnabled = true;
+    debugPaintHitAreas = true;
+    debugHitSelectEnabled = false;
+    expect(collectHitDevToolsSnapshot()['probeMode'], isTrue);
+    expect(collectHitDevToolsSnapshot()['selectMode'], isFalse);
+
+    debugHitSelectEnabled = true;
+    debugHitProbeEnabled = false;
+    expect(collectHitDevToolsSnapshot()['selectMode'], isTrue);
+    expect(collectHitDevToolsSnapshot()['probeMode'], isFalse);
+  });
+
+  test('postHitProbedEvent accepts probe payload shape', () {
+    postHitProbedEvent(<String, Object?>{
+      'x': 10.0,
+      'y': 20.0,
+      'hits': <Map<String, Object?>>[
+        <String, Object?>{
+          'kind': 'layer',
+          'id': 1,
+          'type': 'HitLayer',
+          'debugLabel': 'test',
+        },
+      ],
+      'notes': <String>['example note'],
+    });
+  });
+
+  testWidgets('probe catches SliverHitScope via globalBounds', (tester) async {
+    ensureHitDevToolsInitialized();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CustomScrollView(
+            slivers: [
+              SliverHitScope(
+                debugLabel: 'probe-sliver-scope',
+                sliver: const SliverToBoxAdapter(
+                  child: SizedBox(height: 200, width: double.infinity),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final Map<String, Object?> snap = collectHitDevToolsSnapshot();
+    final Map<String, Object?> scope = (snap['scopes']! as List)
+        .whereType<Map>()
+        .map((Map raw) => raw.cast<String, Object?>())
+        .firstWhere(
+          (Map<String, Object?> s) => s['debugLabel'] == 'probe-sliver-scope',
+        );
+    expect(scope['type'], 'SliverHitScope');
+    expect(scope['globalBounds'], isNotNull);
+
+    final Map<String, Object?> global =
+        scope['globalBounds']! as Map<String, Object?>;
+    final double x = ((global['left'] as num) + (global['right'] as num)) / 2;
+    final double y = ((global['top'] as num) + (global['bottom'] as num)) / 2;
+
+    final Map<String, Object?> probe = probeHitAt(Offset(x, y));
+    final List<Object?> hits = probe['hits']! as List<Object?>;
+    expect(
+      hits.any((Object? h) {
+        if (h is! Map) {
+          return false;
+        }
+        return h['kind'] == 'scope' &&
+            h['type'] == 'SliverHitScope' &&
+            h['debugLabel'] == 'probe-sliver-scope';
+      }),
+      isTrue,
+    );
   });
 }

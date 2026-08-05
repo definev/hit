@@ -227,7 +227,8 @@ Stable surface from `package:hit/hit.dart`:
 - `HitLayer`, `HitScope` / `HitScopeState`, `SliverHitScope` / `SliverHitScopeState`, `HitScopeHandle`
 - `HitDefer`, `HitDeferPaint`
 - `HitLink`, `HitDeferRegistration`
-- `debugPaintHitAreas`, `paintHitAreaDebugOverlay`, `ensureHitDevToolsInitialized`
+- `debugPaintHitAreas`, `debugHitSelectEnabled`, `debugHitProbeEnabled`,
+  `paintHitAreaDebugOverlay`, `ensureHitDevToolsInitialized`
 - Optional `debugLabel` on `HitLayer` / `HitDefer` / `HitScope` / `SliverHitScope`
 
 ### `HitLayer`
@@ -324,13 +325,15 @@ hide them).
 Apps that depend on `package:hit` get a **hit** tab in Dart DevTools (enable
 it from the Extensions menu the first time). The tab can:
 
-- toggle hit-area overlays and **Select** mode remotely
+- toggle hit-area overlays, **Select**, and **Probe** mode remotely
 - browse a hierarchical **Hit Scope Tree** (`TreeView`) of scopes and targets
-- inspect **Hit Layer Details** and **Hit Analysis** for the selection
+- inspect **Details** for the selection, or a **Probe** list after tapping
+  the app
 - tap a debug-painted hit area in the app (with Select on) to jump/highlight
   the matching tree node and open the `HitLayer` / `HitDefer` / `HitScope`
   call site in the IDE (via Flutter Widget Inspector navigate)
-- probe a global `(x, y)` and explain what would hit / why a tap might miss
+- with Probe on, tap the app to list every hit area under that point and
+  explain why a tap might miss; tap a row to highlight and jump in the tree
 
 Service extensions (`ext.hit.*`) register automatically in debug/profile when
 any hit widget mounts. Prefer setting `debugLabel` on targets/scopes so the

@@ -17,6 +17,7 @@ part 'hit_details.dart';
 part 'hit_format.dart';
 part 'hit_home.dart';
 part 'hit_node_data.dart';
+part 'hit_probe.dart';
 part 'hit_scope_tree.dart';
 part 'hit_tree_model.dart';
 

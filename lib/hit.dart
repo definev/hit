@@ -5,6 +5,7 @@ export 'src/hit_debug.dart'
         debugPaintHitAreas,
         debugHighlightHitTargetId,
         debugHitSelectEnabled,
+        debugHitProbeEnabled,
         hitDebugPaintingEnabled,
         addHitDebugPaintListener,
         removeHitDebugPaintListener,
@@ -16,12 +17,14 @@ export 'src/hit_devtools.dart'
         ensureHitDevToolsInitialized,
         HitDevToolsMethods,
         hitSelectedEventKind,
+        hitProbedEventKind,
         collectHitDevToolsSnapshot,
         findHitRenderObjectById,
         inspectHitTarget,
         probeHitAt,
         selectHitTargetAt,
-        postHitSelectedEvent;
+        postHitSelectedEvent,
+        postHitProbedEvent;
 export 'src/hit_defer.dart' show HitDefer;
 export 'src/hit_layer.dart' show HitLayer;
 export 'src/hit_link.dart' show HitLink, HitDeferRegistration, HitDeferPaint;

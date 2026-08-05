@@ -39,12 +39,14 @@ class _ToolbarToggle extends StatelessWidget {
 
 class _Panel extends StatelessWidget {
   const _Panel({
-    required this.title,
     required this.child,
+    this.title,
+    this.titleWidget,
     this.actions,
-  });
+  }) : assert(title != null || titleWidget != null);
 
-  final String title;
+  final String? title;
+  final Widget? titleWidget;
   final Widget child;
   final Widget? actions;
 
@@ -69,14 +71,15 @@ class _Panel extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    title,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      letterSpacing: 0.6,
-                      fontWeight: FontWeight.w700,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
+                  child: titleWidget ??
+                      Text(
+                        title!,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          letterSpacing: 0.6,
+                          fontWeight: FontWeight.w700,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                 ),
                 if (actions != null) actions!,
               ],
@@ -86,6 +89,92 @@ class _Panel extends StatelessWidget {
         Divider(height: 1, color: theme.colorScheme.outlineVariant),
         Expanded(child: child),
       ],
+    );
+  }
+}
+
+enum _SidePaneTab { details, probe }
+
+class _SidePaneTabs extends StatelessWidget {
+  const _SidePaneTabs({
+    required this.tab,
+    required this.hasProbe,
+    required this.onChanged,
+  });
+
+  final _SidePaneTab tab;
+  final bool hasProbe;
+  final ValueChanged<_SidePaneTab> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _SidePaneTabButton(
+          label: 'DETAILS',
+          selected: tab == _SidePaneTab.details,
+          onPressed: () => onChanged(_SidePaneTab.details),
+        ),
+        const SizedBox(width: 2),
+        _SidePaneTabButton(
+          label: 'PROBE',
+          selected: tab == _SidePaneTab.probe,
+          badge: hasProbe,
+          onPressed: () => onChanged(_SidePaneTab.probe),
+        ),
+      ],
+    );
+  }
+}
+
+class _SidePaneTabButton extends StatelessWidget {
+  const _SidePaneTabButton({
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+    this.badge = false,
+  });
+
+  final String label;
+  final bool selected;
+  final bool badge;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colors = theme.colorScheme;
+    final Color fg = selected ? colors.onSurface : colors.onSurfaceVariant;
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.labelLarge?.copyWith(
+                letterSpacing: 0.6,
+                fontWeight: FontWeight.w700,
+                color: fg,
+              ),
+            ),
+            if (badge) ...[
+              const SizedBox(width: 5),
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: selected ? colors.primary : colors.onSurfaceVariant,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

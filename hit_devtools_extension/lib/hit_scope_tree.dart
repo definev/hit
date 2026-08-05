@@ -201,17 +201,6 @@ class _TreeRowContent extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (isHighlighted) ...[
-            const SizedBox(width: 4),
-            Container(
-              width: 6,
-              height: 6,
-              decoration: const BoxDecoration(
-                color: _highlightGreen,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ],
         ],
       ),
     );
